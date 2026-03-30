@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SurveyStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum QuestionType {
+  SINGLE
+  SCALE
+  TEXT
+}
+
+enum ResidentStatus {
+  ACTIVE
+  PENDING
+  DISABLED
+}
+
+enum ActorType {
+  RESIDENT
+  ADMIN
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
+
+model House {
+  id            String         @id @default(cuid())
+  code          String         @unique
+  label         String?
+  residents     Resident[]
+  votes         Vote[]
+  otpChallenges OtpChallenge[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Resident {
+  id              String         @id @default(cuid())
+  phoneNormalized String
+  phoneRaw        String
+  status          ResidentStatus @default(ACTIVE)
+  houseId         String
+  house           House           @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  votes           Vote[]
+  sessions        AuthSession[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([phoneNormalized, houseId], map: "resident_phone_house_unique")
+}
+
+model AdminUser {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  role         AdminRole     @default(ADMIN)
+  mfaEnabled   Boolean       @default(false)
+  mfaSecret    String?
+  sessions     AuthSession[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Survey {
+  id            String       @id @default(cuid())
+  slug          String       @unique
+  title         String
+  description   String?
+  status        SurveyStatus @default(DRAFT)
+  deadline      DateTime?
+  totalEligible Int          @default(0)
+  questions     Question[]
+  votes         Vote[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Question {
+  id          String       @id @default(cuid())
+  surveyId    String
+  survey      Survey       @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  position    Int
+  type        QuestionType
+  text        String
+  description String?
+  options     SurveyOption[]
+  answers     Answer[]
+
+  @@unique([surveyId, position], map: "question_survey_position_unique")
+}
+
+model SurveyOption {
+  id        String    @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  position   Int
+  label      String
+  answers    Answer[]
+
+  @@unique([questionId, position], map: "option_question_position_unique")
+}
+
+model Vote {
+  id          String   @id @default(cuid())
+  surveyId    String
+  survey      Survey   @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  houseId     String
+  house       House    @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  residentId  String
+  resident    Resident @relation(fields: [residentId], references: [id], onDelete: Restrict)
+  submittedAt DateTime @default(now())
+  answers     Answer[]
+
+  @@unique([surveyId, houseId], map: "vote_survey_house_unique")
+}
+
+model Answer {
+  id        String       @id @default(cuid())
+  voteId    String
+  vote      Vote         @relation(fields: [voteId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  optionId   String?
+  option     SurveyOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
+  scaleValue Int?
+  textValue  String?
+}
+
+model OtpChallenge {
+  id              String   @id @default(cuid())
+  phoneNormalized String
+  houseId         String
+  house           House    @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  codeHash        String
+  provider        String
+  expiresAt       DateTime
+  verifiedAt      DateTime?
+  attempts        Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([phoneNormalized, houseId, createdAt])
+}
+
+model AuthSession {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  actorType   ActorType
+  residentId  String?
+  resident    Resident? @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  actorType   ActorType
+  action      String
+  residentId  String?
+  resident    Resident? @relation(fields: [residentId], references: [id], onDelete: SetNull)
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([action, createdAt])
+}

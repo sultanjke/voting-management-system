@@ -1,0 +1,32 @@
+# Root artifacts
+.next/
+node_modules/
+
+# Client artifacts
+client/.next/
+client/node_modules/
+client/dist/
+client/build/
+
+# Server artifacts
+server/.next/
+server/node_modules/
+server/dist/
+server/build/
+server/coverage/
+server/playwright-report/
+server/test-results/
+
+# Environment files
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

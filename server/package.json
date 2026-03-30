@@ -1,0 +1,41 @@
+{
+    "name":  "resident-vote-api",
+    "version":  "1.0.0",
+    "private":  true,
+    "scripts":  {
+                    "dev":  "tsx watch -r tsconfig-paths/register src/server.ts",
+                    "build":  "tsc --noEmit",
+                    "start":  "tsx -r tsconfig-paths/register src/server.ts",
+                    "test":  "vitest run",
+                    "test:watch":  "vitest",
+                    "prisma:generate":  "prisma generate",
+                    "prisma:migrate":  "prisma migrate dev",
+                    "prisma:seed":  "prisma db seed",
+                    "prisma:localize-surveys":  "tsx prisma/backfill-survey-localization.ts",
+                    "prepare":  "prisma generate"
+                },
+    "dependencies":  {
+                         "@prisma/client":  "5.22.0",
+                         "bcryptjs":  "2.4.3",
+                         "cookie-parser":  "1.4.7",
+                         "cors":  "2.8.5",
+                         "express":  "4.21.2",
+                         "twilio":  "5.13.1",
+                         "zod":  "3.23.8"
+                     },
+    "devDependencies":  {
+                            "@types/bcryptjs":  "2.4.6",
+                            "@types/cookie-parser":  "1.4.8",
+                            "@types/cors":  "2.8.17",
+                            "@types/express":  "4.17.21",
+                            "@types/node":  "22.15.30",
+                            "prisma":  "5.22.0",
+                            "tsconfig-paths":  "4.2.0",
+                            "tsx":  "4.20.3",
+                            "typescript":  "5.8.3",
+                            "vitest":  "3.2.4"
+                        },
+    "prisma":  {
+                   "seed":  "tsx prisma/seed.ts"
+               }
+}
