@@ -24,3 +24,14 @@ All client requests use `/api/*`.
 `next.config.ts` rewrites those paths to the Express server target:
 
 - `API_PROXY_TARGET` (default `http://localhost:4000`)
+
+## Vercel deployment
+
+- Framework preset: Next.js
+- Root Directory: `client`
+- Build command: `npm run build` (default)
+- Output: Next.js default
+- Environment variables:
+  - `API_PROXY_TARGET=https://<railway-api-domain>`
+
+This keeps browser requests same-origin (`/api/*`) while Vercel proxies them to Railway.

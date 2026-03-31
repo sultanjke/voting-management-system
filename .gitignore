@@ -7,6 +7,10 @@ client/.next/
 client/node_modules/
 client/dist/
 client/build/
+client/.vercel/
+client/.env
+client/.env.*
+!client/.env.example
 
 # Server artifacts
 server/.next/

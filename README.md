@@ -27,8 +27,50 @@ Services:
 - `npm run dev:client` - run Next.js client
 - `npm run dev` - run both services
 - `npm run build` - build/type-check both apps
+- `npm run db:deploy` - run Prisma migrate deploy on server
+- `npm run db:seed` - run server seed script
 
 ## Environment files
 
 - API runtime: `server/.env`
 - API template: `server/.env.example`
+- Client env template: `client/.env.example`
+
+## Production deployment (Vercel + Railway)
+
+### 1) Deploy client on Vercel
+
+- Import repo in Vercel
+- Set **Root Directory** to `client`
+- Set env var in Vercel project:
+  - `API_PROXY_TARGET=https://<railway-api-domain>`
+
+The client keeps calling `/api/*`; Next rewrites proxy these to your Railway API.
+
+### 2) Deploy API on Railway
+
+- Create service from the same repo
+- Set **Root Directory** to `server`
+- Start command: `npm run start`
+- Required env vars:
+  - `NODE_ENV=production`
+  - `CLIENT_ORIGIN=https://<your-vercel-domain>`
+  - `DATABASE_URL=...`
+  - `SESSION_SECRET=...`
+  - `OTP_SMS_PROVIDER=vonage` or `twilio`
+  - matching OTP credentials (`VONAGE_*` or `TWILIO_*`)
+
+### 3) Run database migration lifecycle
+
+Run on Railway (or CI/CD):
+
+```bash
+npm run prisma:generate
+npm run prisma:deploy
+```
+
+Optional first deploy data only:
+
+```bash
+npm run prisma:seed
+```

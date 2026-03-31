@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  CLIENT_ORIGIN: z.string().url().default("http://localhost:3000"),
   DATABASE_URL: z.string().default("postgresql://postgres:postgres@localhost:5432/resident_vote?schema=public"),
   SESSION_SECRET: z.string().min(32).default("development-session-secret-that-is-at-least-32-chars"),
   OTP_SMS_PROVIDER: z.enum(["twilio", "vonage"]).default("twilio"),
@@ -21,6 +22,7 @@ const envSchema = z.object({
 
 export const env = envSchema.parse({
   NODE_ENV: process.env.NODE_ENV,
+  CLIENT_ORIGIN: process.env.CLIENT_ORIGIN,
   DATABASE_URL: process.env.DATABASE_URL,
   SESSION_SECRET: process.env.SESSION_SECRET,
   OTP_SMS_PROVIDER: process.env.OTP_SMS_PROVIDER,

@@ -8,7 +8,9 @@
     "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build",
-    "build": "npm run build:server && npm run build:client"
+    "build": "npm run build:server && npm run build:client",
+    "db:deploy": "npm --prefix server run prisma:deploy",
+    "db:seed": "npm --prefix server run prisma:seed"
   },
   "devDependencies": {
     "concurrently": "9.1.2"

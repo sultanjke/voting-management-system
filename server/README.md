@@ -74,3 +74,28 @@ Default API URL: `http://localhost:4000`
 - One vote per house per survey is enforced by DB and API logic.
 - Dev mode can return `devCode` in OTP request response.
 - Production requires valid provider credentials and production-ready env values.
+
+## Railway deployment
+
+- Root Directory: `server`
+- Start command: `npm run start`
+- Required env vars:
+  - `NODE_ENV=production`
+  - `CLIENT_ORIGIN=https://<your-vercel-domain>`
+  - `DATABASE_URL=...`
+  - `SESSION_SECRET=...`
+  - `OTP_SMS_PROVIDER=vonage` or `twilio`
+  - matching OTP credentials (`VONAGE_*` or `TWILIO_*`)
+
+Run DB deploy steps in Railway shell or CI:
+
+```bash
+npm run prisma:generate
+npm run prisma:deploy
+```
+
+Optional one-time bootstrap data:
+
+```bash
+npm run prisma:seed
+```

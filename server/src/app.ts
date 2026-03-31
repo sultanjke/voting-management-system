@@ -6,14 +6,14 @@ import { adminAuthRouter } from "@/src/routes/admin-auth";
 import { adminManagementRouter } from "@/src/routes/admin-management";
 import { residentAuthRouter } from "@/src/routes/resident-auth";
 import { residentSurveysRouter } from "@/src/routes/resident-surveys";
+import { env } from "@/lib/env";
 
 export function createApp() {
   const app = express();
-  const clientOrigin = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
 
   app.use(
     cors({
-      origin: clientOrigin,
+      origin: env.CLIENT_ORIGIN,
       credentials: true
     })
   );
