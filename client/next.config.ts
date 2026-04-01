@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const apiTarget = process.env.API_PROXY_TARGET ?? "http://localhost:4000";
+const apiTarget = (process.env.API_PROXY_TARGET ?? "http://localhost:4000").replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
   experimental: {
