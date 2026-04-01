@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { PageLoader } from "@/components/page-loader";
 import { ResidentDashboard } from "@/components/resident-dashboard";
 import { ResidentLogin } from "@/components/resident-login";
 import type { ResidentSessionResponse, ResidentSurveyCard } from "@shared/contracts";
@@ -37,13 +38,7 @@ export default function ResidentHomePage() {
   }, []);
 
   if (loading) {
-    return (
-      <main className="app-shell">
-        <section className="glass-panel p-6">
-          <p className="text-sm text-slate-600">Loading...</p>
-        </section>
-      </main>
-    );
+    return <PageLoader />;
   }
 
   if (!session?.authenticated) {

@@ -11,8 +11,8 @@ const ui = Noto_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Дауыс беру жүйесі",
-  description: "Тұрғындар сауалнамасы мен дауыс беру платформасы"
+  title: "Voting Application System",
+  description: "An application for managing resident surveys and voting in residential buildings."
 };
 
 export default function RootLayout({

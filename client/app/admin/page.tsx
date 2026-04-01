@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AdminPanel } from "@/components/admin-panel";
+import { PageLoader } from "@/components/page-loader";
 import type {
   AdminResidentRow,
   AdminSessionResponse,
@@ -58,13 +59,7 @@ export default function AdminPage() {
   }, [router]);
 
   if (loading) {
-    return (
-      <main className="app-shell">
-        <section className="glass-panel p-6">
-          <p className="text-sm text-slate-600">Loading...</p>
-        </section>
-      </main>
-    );
+    return <PageLoader />;
   }
 
   return <AdminPanel adminEmail={adminLogin} residents={residents} surveys={surveys} analytics={analytics} />;

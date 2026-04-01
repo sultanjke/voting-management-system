@@ -4,12 +4,19 @@ import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit";
 import type { Lang } from "@/lib/i18n";
+import { normalizeHouseCode, normalizePhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { localizeSurveyContent, localizeSurveyTextPatch } from "@/lib/survey-localization";
 import { requireAdminSession } from "@/src/middleware/auth";
 
 const patchResidentSchema = z.object({
   status: z.nativeEnum(ResidentStatus)
+});
+
+const createResidentSchema = z.object({
+  phone: z.string().min(5),
+  houseCode: z.string().min(1),
+  status: z.nativeEnum(ResidentStatus).default(ResidentStatus.ACTIVE)
 });
 
 const questionSchema = z
@@ -43,7 +50,7 @@ const createSurveySchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]{3,80}$/).optional(),
   title: z.string().min(3),
   description: z.string().optional(),
-  status: z.nativeEnum(SurveyStatus).default(SurveyStatus.DRAFT),
+  status: z.nativeEnum(SurveyStatus).default(SurveyStatus.ACTIVE),
   deadline: deadlineSchema.nullable().optional(),
   totalEligible: z.number().int().positive(),
   questions: z.array(questionSchema).min(1)
@@ -120,6 +127,76 @@ adminManagementRouter.get("/residents", requireAdminSession, async (_request, re
       votes: resident._count.votes
     }))
   });
+});
+
+adminManagementRouter.post("/residents", requireAdminSession, async (request, response) => {
+  const payload = createResidentSchema.safeParse(request.body);
+  if (!payload.success) {
+    response.status(400).json({ error: "Invalid resident payload." });
+    return;
+  }
+
+  const phoneNormalized = normalizePhone(payload.data.phone);
+  const houseCode = normalizeHouseCode(payload.data.houseCode);
+
+  if (!phoneNormalized || !houseCode) {
+    response.status(400).json({ error: "Phone and house code are required." });
+    return;
+  }
+
+  const house = await prisma.house.upsert({
+    where: {
+      code: houseCode
+    },
+    create: {
+      code: houseCode,
+      label: `House ${houseCode}`
+    },
+    update: {}
+  });
+
+  try {
+    const created = await prisma.resident.create({
+      data: {
+        phoneNormalized,
+        phoneRaw: payload.data.phone.trim(),
+        status: payload.data.status,
+        houseId: house.id
+      },
+      include: {
+        house: true,
+        _count: {
+          select: {
+            votes: true
+          }
+        }
+      }
+    });
+
+    await writeAuditLog({
+      actorType: ActorType.ADMIN,
+      action: "admin.resident.created",
+      adminUserId: request.adminSession!.adminUser.id,
+      metadata: { residentId: created.id, houseCode: created.house.code }
+    });
+
+    response.status(201).json({
+      resident: {
+        id: created.id,
+        phoneNormalized: created.phoneNormalized,
+        status: created.status,
+        houseCode: created.house.code,
+        votes: created._count.votes
+      }
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      response.status(409).json({ error: "Resident with this phone and house already exists." });
+      return;
+    }
+
+    throw error;
+  }
 });
 
 adminManagementRouter.patch("/residents/:residentId", requireAdminSession, async (request, response) => {
@@ -373,26 +450,31 @@ adminManagementRouter.delete("/surveys/:surveyId", requireAdminSession, async (r
     return;
   }
 
-  if (existing._count.votes > 0) {
-    response.status(409).json({ error: "Survey with submitted votes cannot be deleted." });
-    return;
-  }
-
   try {
-    await prisma.survey.delete({
-      where: {
-        id: surveyId
-      }
+    const voteDeletion = await prisma.$transaction(async (tx) => {
+      const deletedVotes = await tx.vote.deleteMany({
+        where: {
+          surveyId
+        }
+      });
+
+      await tx.survey.delete({
+        where: {
+          id: surveyId
+        }
+      });
+
+      return deletedVotes.count;
     });
 
     await writeAuditLog({
       actorType: ActorType.ADMIN,
       action: "admin.survey.deleted",
       adminUserId: request.adminSession!.adminUser.id,
-      metadata: { surveyId, slug: existing.slug }
+      metadata: { surveyId, slug: existing.slug, forced: existing._count.votes > 0, deletedVotes: voteDeletion }
     });
 
-    response.json({ ok: true, surveyId });
+    response.json({ ok: true, surveyId, deletedVotes: voteDeletion });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       response.status(404).json({ error: "Survey not found." });

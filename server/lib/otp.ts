@@ -29,7 +29,7 @@ function createCode(): string {
 }
 
 function buildMessageBody(code: string): string {
-  return `Verification code: ${code}. This code expires in ${OTP_TTL_MINUTES} minutes.`;
+  return `Код подтверждения: ${code}. Этот код истекает через ${OTP_TTL_MINUTES} минут.`;
 }
 
 function asWhatsAppAddress(value: string): string {

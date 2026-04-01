@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { PageLoader } from "@/components/page-loader";
 import { ResultsView } from "@/components/results-view";
 import type { ResidentResultsPayload, ResidentSessionResponse } from "@shared/contracts";
 
@@ -37,13 +38,7 @@ export default function ResultsPage() {
   }, [router]);
 
   if (loading) {
-    return (
-      <main className="app-shell">
-        <section className="glass-panel p-6">
-          <p className="text-sm text-slate-600">Loading...</p>
-        </section>
-      </main>
-    );
+    return <PageLoader />;
   }
 
   return <ResultsView surveys={surveys} />;

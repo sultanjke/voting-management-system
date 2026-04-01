@@ -15,6 +15,7 @@ type RequestResponse = {
 };
 
 const OTP_LENGTH = 6;
+const SESSION_HINT_POPUP_FLAG = "rv_show_session_hint_popup";
 
 export function ResidentLogin() {
   const { t } = useI18n();
@@ -156,6 +157,11 @@ export function ResidentLogin() {
       if (payload.sessionIssued) {
         setInfo(t("residentLogin.sessionRestored"));
         window.setTimeout(() => {
+          try {
+            window.sessionStorage.setItem(SESSION_HINT_POPUP_FLAG, "1");
+          } catch {
+            // ignore browser storage issues
+          }
           window.location.reload();
         }, 700);
         return;
@@ -201,6 +207,11 @@ export function ResidentLogin() {
         setOtpSuccess(true);
         setInfo(t("residentLogin.success"));
         window.setTimeout(() => {
+          try {
+            window.sessionStorage.setItem(SESSION_HINT_POPUP_FLAG, "1");
+          } catch {
+            // ignore browser storage issues
+          }
           window.location.reload();
         }, 1000);
       } finally {
@@ -265,6 +276,7 @@ export function ResidentLogin() {
                 onChange={(event) => setHouseCode(event.target.value)}
               />
             </div>
+
             <button className="primary-btn w-full" disabled={loading} onClick={requestOtp} type="button">
               {loading ? t("residentLogin.sending") : t("residentLogin.send")}
             </button>

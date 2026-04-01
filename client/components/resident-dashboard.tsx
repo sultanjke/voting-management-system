@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useI18n } from "@/components/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -14,6 +14,8 @@ type Props = {
   surveys: ResidentSurveyCard[];
 };
 
+const SESSION_HINT_POPUP_FLAG = "rv_show_session_hint_popup";
+
 function statusBadge(status: string, t: (key: string) => string) {
   if (status === "ACTIVE") {
     return <span className="badge badge-active">{t("status.active")}</span>;
@@ -21,15 +23,41 @@ function statusBadge(status: string, t: (key: string) => string) {
   if (status === "CLOSED") {
     return <span className="badge badge-closed">{t("status.closed")}</span>;
   }
+  if (status === "ARCHIVED") {
+    return <span className="badge badge-archived">{t("status.archived")}</span>;
+  }
   return <span className="badge badge-draft">{t("status.draft")}</span>;
 }
 
 export function ResidentDashboard({ houseCode, surveys }: Props) {
   const { t, lang } = useI18n();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [showSessionHint, setShowSessionHint] = useState(false);
 
   const activeCount = surveys.filter((survey) => survey.status === "ACTIVE").length;
   const completedCount = surveys.filter((survey) => survey.alreadyVoted).length;
+
+  useEffect(() => {
+    try {
+      const shouldShow = window.sessionStorage.getItem(SESSION_HINT_POPUP_FLAG) === "1";
+      if (!shouldShow) {
+        return;
+      }
+      setShowSessionHint(true);
+    } catch {
+      // ignore browser storage issues
+      return;
+    }
+  }, []);
+
+  const closeSessionHint = () => {
+    try {
+      window.sessionStorage.removeItem(SESSION_HINT_POPUP_FLAG);
+    } catch {
+      // ignore browser storage issues
+    }
+    setShowSessionHint(false);
+  };
 
   const logout = async () => {
     setLoggingOut(true);
@@ -39,11 +67,30 @@ export function ResidentDashboard({ houseCode, surveys }: Props) {
 
   return (
     <main className="app-shell space-y-5">
+      {showSessionHint ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-2xl border border-blue-200 bg-white px-5 py-5 text-slate-900 shadow-xl">
+            <p className="flex items-start gap-2 text-sm leading-6 text-slate-700">
+              <span
+                aria-hidden="true"
+                className="mt-[5px] inline-flex h-4 w-4 flex-none items-center justify-center rounded-full border border-red-400 text-[10px] font-bold text-red-700"
+              >
+                !
+              </span>
+              <span>{t("residentLogin.sessionHint")}</span>
+            </p>
+            <button className="primary-btn mt-4 w-full" onClick={closeSessionHint} type="button">
+              {t("residentDashboard.sessionHintClose")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <section className="glass-panel p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm uppercase tracking-[0.17em] text-slate-600">{t("residentDashboard.portal")}</p>
-            <h1 className="mt-1 text-4xl">{t("residentDashboard.house", { house: houseCode })}</h1>
+            <h1 className="mt-3 text-4xl mb-3">🏡 {t("residentDashboard.house", { house: houseCode })}</h1>
             <p className="mt-2 text-sm text-slate-600">{t("residentDashboard.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -104,7 +151,7 @@ export function ResidentDashboard({ houseCode, surveys }: Props) {
                   </p>
                 ) : null}
 
-                <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-5">
                   <p>
                     {t("residentDashboard.questions")}: <strong>{survey.questionCount}</strong>
                   </p>

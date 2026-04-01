@@ -51,6 +51,19 @@ function statusLabel(status: SurveyStatus, t: (key: string) => string): string {
   return t("status.draft");
 }
 
+function statusBadgeClass(status: SurveyStatus): string {
+  if (status === "ACTIVE") {
+    return "badge badge-active";
+  }
+  if (status === "CLOSED") {
+    return "badge badge-closed";
+  }
+  if (status === "ARCHIVED") {
+    return "badge badge-archived";
+  }
+  return "badge badge-draft";
+}
+
 export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
   const { t, lang } = useI18n();
   const participation = survey.totalEligible > 0 ? Math.round((survey.voteCount / survey.totalEligible) * 100) : 0;
@@ -87,7 +100,7 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
           </div>
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
-            <span className={survey.status === "ACTIVE" ? "badge badge-active" : "badge badge-closed"}>{statusLabel(survey.status, t)}</span>
+            <span className={statusBadgeClass(survey.status)}>{statusLabel(survey.status, t)}</span>
             <Link className="secondary-btn" href="/admin">
               {t("admin.backToSurveys")}
             </Link>

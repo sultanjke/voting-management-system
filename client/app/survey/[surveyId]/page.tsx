@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { PageLoader } from "@/components/page-loader";
 import { SurveyRunner } from "@/components/survey-runner";
 import type { ResidentSessionResponse, ResidentSurveyDetail } from "@shared/contracts";
 
@@ -49,13 +50,7 @@ export default function SurveyPage() {
   }, [router, surveyId]);
 
   if (loading) {
-    return (
-      <main className="app-shell">
-        <section className="glass-panel p-6">
-          <p className="text-sm text-slate-600">Loading...</p>
-        </section>
-      </main>
-    );
+    return <PageLoader />;
   }
 
   if (missing || !survey) {

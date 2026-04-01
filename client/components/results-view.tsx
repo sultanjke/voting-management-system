@@ -42,6 +42,19 @@ function statusLabel(status: string, t: (key: string) => string): string {
   return t("status.draft");
 }
 
+function statusBadgeClass(status: string): string {
+  if (status === "ACTIVE") {
+    return "badge badge-active";
+  }
+  if (status === "CLOSED") {
+    return "badge badge-closed";
+  }
+  if (status === "ARCHIVED") {
+    return "badge badge-archived";
+  }
+  return "badge badge-draft";
+}
+
 export function ResultsView({ surveys }: { surveys: ResultSurvey[] }) {
   const { t, lang } = useI18n();
 
@@ -66,7 +79,7 @@ export function ResultsView({ surveys }: { surveys: ResultSurvey[] }) {
         <section className="glass-panel p-5" key={survey.id}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl">{decodeLocalizedText(survey.title, lang) ?? survey.title}</h2>
-            <span className={survey.status === "ACTIVE" ? "badge badge-active" : "badge badge-closed"}>{statusLabel(survey.status, t)}</span>
+            <span className={statusBadgeClass(survey.status)}>{statusLabel(survey.status, t)}</span>
           </div>
           <p className="mt-2 text-sm text-slate-600">
             {t("results.participation")}: {survey.participation.responded} / {survey.participation.totalEligible} ({survey.participation.percentage}

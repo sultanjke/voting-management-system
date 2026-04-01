@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AdminSurveyResults } from "@/components/admin-survey-results";
+import { PageLoader } from "@/components/page-loader";
 import type { AdminSessionResponse, AdminSurveyResultsPayload } from "@shared/contracts";
 
 export default function AdminSurveyResultsPage() {
@@ -52,13 +53,7 @@ export default function AdminSurveyResultsPage() {
   }, [router, surveyId]);
 
   if (loading) {
-    return (
-      <main className="app-shell">
-        <section className="glass-panel p-6">
-          <p className="text-sm text-slate-600">Loading...</p>
-        </section>
-      </main>
-    );
+    return <PageLoader />;
   }
 
   if (missing || !survey) {
