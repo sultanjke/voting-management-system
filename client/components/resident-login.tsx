@@ -10,6 +10,7 @@ type RequestResponse = {
   message?: string;
   devCode?: string;
   retryAfterSeconds?: number;
+  sessionIssued?: boolean;
   error?: string;
 };
 
@@ -144,7 +145,19 @@ export function ResidentLogin() {
 
       const payload = (await response.json()) as RequestResponse;
       if (!response.ok) {
-        setError(t("residentLogin.requestFailed"));
+        const cooldownMessage =
+          payload.retryAfterSeconds && payload.retryAfterSeconds > 0
+            ? ` ${t("residentLogin.retryAfter", { seconds: payload.retryAfterSeconds })}`
+            : "";
+        setError(`${t("residentLogin.requestFailed")}${cooldownMessage}`);
+        return;
+      }
+
+      if (payload.sessionIssued) {
+        setInfo(t("residentLogin.sessionRestored"));
+        window.setTimeout(() => {
+          window.location.reload();
+        }, 700);
         return;
       }
 

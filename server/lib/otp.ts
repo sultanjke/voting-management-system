@@ -15,8 +15,10 @@ type OtpRequestResult =
   | { ok: false; status: number; message: string; retryAfterSeconds?: number };
 
 type OtpVerifyResult =
-  | { ok: true; residentId: string; houseId: string }
+  | { ok: true; residentId: string; houseId: string; phoneNormalized: string; houseCode: string }
   | { ok: false; status: number; message: string };
+
+type OtpProvider = "twilio" | "vonage" | "twilio_whatsapp";
 
 function hashCode(code: string): string {
   return createHash("sha256").update(`${code}:${env.SESSION_SECRET}`).digest("hex");
@@ -122,19 +124,57 @@ async function sendViaVonage(phone: string, code: string): Promise<void> {
   }
 }
 
-async function sendOtpCode(phone: string, code: string): Promise<"twilio" | "vonage" | "twilio_whatsapp"> {
-  if (env.OTP_SMS_PROVIDER === "twilio_whatsapp") {
-    await sendViaTwilioWhatsApp(phone, code);
-    return "twilio_whatsapp";
+function isProviderConfigured(provider: OtpProvider): boolean {
+  if (provider === "twilio_whatsapp") {
+    return Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && (env.TWILIO_WHATSAPP_FROM_NUMBER ?? env.TWILIO_FROM_NUMBER));
   }
 
-  if (env.OTP_SMS_PROVIDER === "vonage") {
+  if (provider === "twilio") {
+    const hasBase = Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN);
+    const hasSender = Boolean(env.TWILIO_MESSAGING_SERVICE_SID || env.TWILIO_FROM_NUMBER);
+    return hasBase && hasSender;
+  }
+
+  return Boolean(env.VONAGE_API_KEY && env.VONAGE_API_SECRET && env.VONAGE_FROM_NUMBER);
+}
+
+async function sendWithProvider(provider: OtpProvider, phone: string, code: string): Promise<void> {
+  if (provider === "twilio_whatsapp") {
+    await sendViaTwilioWhatsApp(phone, code);
+    return;
+  }
+
+  if (provider === "vonage") {
     await sendViaVonage(phone, code);
-    return "vonage";
+    return;
   }
 
   await sendViaTwilio(phone, code);
-  return "twilio";
+}
+
+async function sendOtpCode(phone: string, code: string): Promise<OtpProvider> {
+  const primary = env.OTP_SMS_PROVIDER as OtpProvider;
+  const candidates: OtpProvider[] = [primary, "twilio_whatsapp", "twilio", "vonage"].filter(
+    (value, index, array): value is OtpProvider => array.indexOf(value as OtpProvider) === index
+  );
+
+  const failures: string[] = [];
+  for (const provider of candidates) {
+    if (!isProviderConfigured(provider)) {
+      continue;
+    }
+
+    try {
+      await sendWithProvider(provider, phone, code);
+      return provider;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${provider}: ${message}`);
+    }
+  }
+
+  const detail = failures.length ? failures.join(" | ") : "No OTP providers are configured.";
+  throw new Error(detail);
 }
 
 export async function requestResidentOtp(phoneInput: string, houseCodeInput: string): Promise<OtpRequestResult> {
@@ -194,7 +234,7 @@ export async function requestResidentOtp(phoneInput: string, houseCodeInput: str
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
 
   try {
-    let provider: "twilio" | "vonage" | "twilio_whatsapp" | "dev-fallback" = "dev-fallback";
+    let provider: OtpProvider | "dev-fallback" = "dev-fallback";
     if (isProduction) {
       provider = await sendOtpCode(phoneNormalized, code);
     }
@@ -315,6 +355,8 @@ export async function verifyResidentOtp(phoneInput: string, houseCodeInput: stri
   return {
     ok: true,
     residentId: resident.id,
-    houseId: resident.houseId
+    houseId: resident.houseId,
+    phoneNormalized,
+    houseCode
   };
 }

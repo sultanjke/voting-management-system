@@ -161,7 +161,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     "residentLogin.subtitle": "Подтвердите номер телефона и номер дома, чтобы войти в портал голосования.",
     "residentLogin.phoneLabel": "Номер телефона",
     "residentLogin.houseLabel": "Номер дома",
-    "residentLogin.send": "Отправить код подтверждения",
+    "residentLogin.send": "Продолжить",
     "residentLogin.sending": "Отправка кода...",
     "residentLogin.otpLabel": "Код подтверждения",
     "residentLogin.verify": "Подтвердить и продолжить",

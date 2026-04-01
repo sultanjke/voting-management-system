@@ -1,14 +1,21 @@
 import { z } from "zod";
 import { Router } from "express";
+import { ResidentStatus } from "@prisma/client";
 
 import { requestResidentOtp, verifyResidentOtp } from "@/lib/otp";
 import { RESIDENT_SESSION_COOKIE } from "@/lib/constants";
+import { normalizeHouseCode, normalizePhone } from "@/lib/phone";
+import { prisma } from "@/lib/prisma";
 import {
   clearResidentSessionCookie,
+  getResidentTrustedTokenFromRequest,
   getResidentSessionForRequest,
   issueResidentSession,
+  issueResidentTrustedToken,
   revokeSession,
-  setResidentSessionCookie
+  resolveResidentTrustedToken,
+  setResidentSessionCookie,
+  setResidentTrustedCookie
 } from "@/src/services/session";
 
 const requestSchema = z.object({
@@ -47,6 +54,46 @@ residentAuthRouter.post("/auth/otp/request", async (request, response) => {
     return;
   }
 
+  const phoneNormalized = normalizePhone(payload.data.phone);
+  const houseCode = normalizeHouseCode(payload.data.houseCode);
+  const trustedToken = getResidentTrustedTokenFromRequest(request);
+  const trusted = resolveResidentTrustedToken(trustedToken);
+
+  if (
+    trusted &&
+    trusted.phoneNormalized === phoneNormalized &&
+    trusted.houseCode === houseCode
+  ) {
+    const trustedResident = await prisma.resident.findFirst({
+      where: {
+        id: trusted.residentId,
+        phoneNormalized,
+        status: ResidentStatus.ACTIVE,
+        house: {
+          code: houseCode
+        }
+      }
+    });
+
+    if (trustedResident) {
+      const sessionToken = await issueResidentSession(trustedResident.id);
+      setResidentSessionCookie(response, sessionToken);
+
+      const refreshedTrustedToken = issueResidentTrustedToken({
+        residentId: trustedResident.id,
+        phoneNormalized,
+        houseCode
+      });
+      setResidentTrustedCookie(response, refreshedTrustedToken);
+
+      response.json({
+        message: "Session restored from trusted device.",
+        sessionIssued: true
+      });
+      return;
+    }
+  }
+
   const result = await requestResidentOtp(payload.data.phone, payload.data.houseCode);
   if (!result.ok) {
     response.status(result.status).json({
@@ -58,7 +105,8 @@ residentAuthRouter.post("/auth/otp/request", async (request, response) => {
 
   response.json({
     message: "Verification code sent.",
-    devCode: result.devCode
+    devCode: result.devCode,
+    sessionIssued: false
   });
 });
 
@@ -77,6 +125,14 @@ residentAuthRouter.post("/auth/otp/verify", async (request, response) => {
 
   const token = await issueResidentSession(result.residentId);
   setResidentSessionCookie(response, token);
+
+  const trustedToken = issueResidentTrustedToken({
+    residentId: result.residentId,
+    phoneNormalized: result.phoneNormalized,
+    houseCode: result.houseCode
+  });
+  setResidentTrustedCookie(response, trustedToken);
+
   response.json({ success: true });
 });
 

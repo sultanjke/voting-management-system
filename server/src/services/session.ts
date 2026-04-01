@@ -6,7 +6,9 @@ import {
   ADMIN_SESSION_COOKIE,
   ADMIN_SESSION_DAYS,
   RESIDENT_SESSION_COOKIE,
-  RESIDENT_SESSION_DAYS
+  RESIDENT_SESSION_DAYS,
+  RESIDENT_TRUSTED_COOKIE,
+  RESIDENT_TRUSTED_DAYS
 } from "@/lib/constants";
 import { env, isProduction } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -21,8 +23,19 @@ export type AdminSession = {
   adminUser: AdminUser;
 };
 
+export type ResidentTrustedPayload = {
+  residentId: string;
+  phoneNormalized: string;
+  houseCode: string;
+  exp: number;
+};
+
 function hashToken(token: string): string {
   return createHash("sha256").update(`${token}:${env.SESSION_SECRET}`).digest("hex");
+}
+
+function signTrustedPayload(encodedPayload: string): string {
+  return createHash("sha256").update(`${encodedPayload}:${env.SESSION_SECRET}`).digest("hex");
 }
 
 function tokenExpiry(days: number): Date {
@@ -52,6 +65,22 @@ function clearCookie(response: Response, name: string): void {
     secure: isProduction,
     path: "/"
   });
+}
+
+function encodeTrustedPayload(payload: ResidentTrustedPayload): string {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
+function decodeTrustedPayload(encoded: string): ResidentTrustedPayload | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as ResidentTrustedPayload;
+    if (!parsed?.residentId || !parsed?.phoneNormalized || !parsed?.houseCode || typeof parsed.exp !== "number") {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export async function issueResidentSession(residentId: string): Promise<string> {
@@ -94,6 +123,59 @@ export function clearResidentSessionCookie(response: Response): void {
 
 export function clearAdminSessionCookie(response: Response): void {
   clearCookie(response, ADMIN_SESSION_COOKIE);
+}
+
+export function issueResidentTrustedToken(input: {
+  residentId: string;
+  phoneNormalized: string;
+  houseCode: string;
+}): string {
+  const expiresAtSeconds = Math.floor(Date.now() / 1000) + RESIDENT_TRUSTED_DAYS * 24 * 60 * 60;
+  const payload: ResidentTrustedPayload = {
+    residentId: input.residentId,
+    phoneNormalized: input.phoneNormalized,
+    houseCode: input.houseCode,
+    exp: expiresAtSeconds
+  };
+  const encodedPayload = encodeTrustedPayload(payload);
+  const signature = signTrustedPayload(encodedPayload);
+  return `${encodedPayload}.${signature}`;
+}
+
+export function resolveResidentTrustedToken(token: string | undefined): ResidentTrustedPayload | null {
+  if (!token) {
+    return null;
+  }
+
+  const [encodedPayload, signature] = token.split(".");
+  if (!encodedPayload || !signature) {
+    return null;
+  }
+
+  const expectedSignature = signTrustedPayload(encodedPayload);
+  if (expectedSignature !== signature) {
+    return null;
+  }
+
+  const payload = decodeTrustedPayload(encodedPayload);
+  if (!payload) {
+    return null;
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (payload.exp <= nowSeconds) {
+    return null;
+  }
+
+  return payload;
+}
+
+export function setResidentTrustedCookie(response: Response, token: string): void {
+  applyCookie(response, RESIDENT_TRUSTED_COOKIE, token, RESIDENT_TRUSTED_DAYS);
+}
+
+export function clearResidentTrustedCookie(response: Response): void {
+  clearCookie(response, RESIDENT_TRUSTED_COOKIE);
 }
 
 async function resolveResidentToken(token: string | undefined): Promise<ResidentSession | null> {
@@ -167,6 +249,10 @@ export async function getResidentSessionForRequest(request: Request): Promise<Re
 export async function getAdminSessionForRequest(request: Request): Promise<AdminSession | null> {
   const token = request.cookies?.[ADMIN_SESSION_COOKIE] as string | undefined;
   return resolveAdminToken(token);
+}
+
+export function getResidentTrustedTokenFromRequest(request: Request): string | undefined {
+  return request.cookies?.[RESIDENT_TRUSTED_COOKIE] as string | undefined;
 }
 
 export async function revokeSession(token: string): Promise<void> {
