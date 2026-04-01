@@ -27,15 +27,24 @@ function createCode(): string {
 }
 
 function buildMessageBody(code: string): string {
-  return `Код подтверждения: ${code}. Этот код истекает через ${OTP_TTL_MINUTES} минут.`;
+  return `Verification code: ${code}. This code expires in ${OTP_TTL_MINUTES} minutes.`;
 }
 
-async function sendViaTwilio(phone: string, code: string): Promise<void> {
+function asWhatsAppAddress(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.startsWith("whatsapp:") ? trimmed : `whatsapp:${trimmed}`;
+}
+
+function getTwilioClient() {
   if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN) {
     throw new Error("Twilio credentials are not configured.");
   }
 
-  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  return twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+}
+
+async function sendViaTwilio(phone: string, code: string): Promise<void> {
+  const client = getTwilioClient();
   const messageBody = buildMessageBody(code);
 
   if (env.TWILIO_MESSAGING_SERVICE_SID) {
@@ -55,6 +64,21 @@ async function sendViaTwilio(phone: string, code: string): Promise<void> {
     to: phone,
     from: env.TWILIO_FROM_NUMBER,
     body: messageBody
+  });
+}
+
+async function sendViaTwilioWhatsApp(phone: string, code: string): Promise<void> {
+  const client = getTwilioClient();
+  const fromRaw = env.TWILIO_WHATSAPP_FROM_NUMBER ?? env.TWILIO_FROM_NUMBER;
+
+  if (!fromRaw) {
+    throw new Error("TWILIO_WHATSAPP_FROM_NUMBER is required for Twilio WhatsApp OTP delivery.");
+  }
+
+  await client.messages.create({
+    to: asWhatsAppAddress(phone),
+    from: asWhatsAppAddress(fromRaw),
+    body: buildMessageBody(code)
   });
 }
 
@@ -98,7 +122,12 @@ async function sendViaVonage(phone: string, code: string): Promise<void> {
   }
 }
 
-async function sendOtpCode(phone: string, code: string): Promise<"twilio" | "vonage"> {
+async function sendOtpCode(phone: string, code: string): Promise<"twilio" | "vonage" | "twilio_whatsapp"> {
+  if (env.OTP_SMS_PROVIDER === "twilio_whatsapp") {
+    await sendViaTwilioWhatsApp(phone, code);
+    return "twilio_whatsapp";
+  }
+
   if (env.OTP_SMS_PROVIDER === "vonage") {
     await sendViaVonage(phone, code);
     return "vonage";
@@ -165,7 +194,7 @@ export async function requestResidentOtp(phoneInput: string, houseCodeInput: str
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
 
   try {
-    let provider: "twilio" | "vonage" | "dev-fallback" = "dev-fallback";
+    let provider: "twilio" | "vonage" | "twilio_whatsapp" | "dev-fallback" = "dev-fallback";
     if (isProduction) {
       provider = await sendOtpCode(phoneNormalized, code);
     }
@@ -194,7 +223,8 @@ export async function requestResidentOtp(phoneInput: string, houseCodeInput: str
       phoneNormalized,
       devCode: isProduction ? undefined : code
     };
-  } catch {
+  } catch (error) {
+    console.error("OTP delivery failed:", error);
     await writeAuditLog({
       actorType: ActorType.RESIDENT,
       action: "resident.otp.request.failed",

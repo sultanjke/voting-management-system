@@ -57,8 +57,8 @@ The client keeps calling `/api/*`; Next rewrites proxy these to your Railway API
   - `CLIENT_ORIGIN=https://<your-vercel-domain>`
   - `DATABASE_URL=...`
   - `SESSION_SECRET=...`
-  - `OTP_SMS_PROVIDER=vonage` or `twilio`
-  - matching OTP credentials (`VONAGE_*` or `TWILIO_*`)
+  - `OTP_SMS_PROVIDER=twilio_whatsapp` (or `twilio` / `vonage`)
+  - matching OTP credentials (`TWILIO_WHATSAPP_*`, `TWILIO_*`, or `VONAGE_*`)
 
 ### 3) Run database migration lifecycle
 

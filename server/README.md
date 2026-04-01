@@ -84,8 +84,8 @@ Default API URL: `http://localhost:4000`
   - `CLIENT_ORIGIN=https://<your-vercel-domain>`
   - `DATABASE_URL=...`
   - `SESSION_SECRET=...`
-  - `OTP_SMS_PROVIDER=vonage` or `twilio`
-  - matching OTP credentials (`VONAGE_*` or `TWILIO_*`)
+  - `OTP_SMS_PROVIDER=twilio_whatsapp` (or `twilio` / `vonage`)
+  - matching OTP credentials (`TWILIO_WHATSAPP_*`, `TWILIO_*`, or `VONAGE_*`)
 
 Run DB deploy steps in Railway shell or CI:
 
