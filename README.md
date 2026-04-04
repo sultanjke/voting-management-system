@@ -1,6 +1,6 @@
 # Voting Management System
 
-Production-ready resident voting platform with bilingual UI (Kazakh/Russian), OTP login, household vote integrity, and admin management tooling.
+Production-ready resident voting platform with bilingual UI (Kazakh/Russian), passkey login, household vote integrity, and admin management tooling.
 
 ## Overview
 
@@ -16,9 +16,8 @@ The frontend never talks directly to Prisma or the database. It calls `/api/*`, 
 
 ### Resident side
 
-- Login with phone + house code
-- OTP verification via provider (`twilio_whatsapp`, `twilio`, `vonage`)
-- Trusted-device restore path (can skip OTP when trusted token matches)
+- Passkey authentication
+- First-time passkey enrollment via phone + house code for active residents
 - Secure cookie-based session
 - Active/closed surveys list
 - Survey voting
@@ -48,16 +47,9 @@ The frontend never talks directly to Prisma or the database. It calls `/api/*`, 
 - HTTP-only session cookies:
   - `rv_resident_session`
   - `rv_admin_session`
-- Signed trusted cookie for resident shortcut:
-  - `rv_resident_trusted`
-- OTP policy:
-  - TTL: 5 minutes
-  - Max attempts: 5
-  - Resend cooldown: 45 seconds
 - Session durations:
   - Resident session: 7 days
   - Admin session: 7 days
-  - Trusted resident token: 30 days
 - Authorization middleware protects resident/admin APIs separately
 - Audit logging tracks auth attempts, vote events, and admin mutations
 - Core DB constraints:
@@ -69,8 +61,10 @@ The frontend never talks directly to Prisma or the database. It calls `/api/*`, 
 Resident:
 
 - `GET /api/resident/session`
-- `POST /api/resident/auth/otp/request`
-- `POST /api/resident/auth/otp/verify`
+- `POST /api/resident/auth/passkey/register/options`
+- `POST /api/resident/auth/passkey/register/verify`
+- `POST /api/resident/auth/passkey/login/options`
+- `POST /api/resident/auth/passkey/login/verify`
 - `POST /api/resident/auth/logout`
 - `GET /api/resident/surveys`
 - `GET /api/resident/surveys/:surveyId`
@@ -85,6 +79,7 @@ Admin:
 - `GET /api/admin/residents`
 - `POST /api/admin/residents`
 - `PATCH /api/admin/residents/:residentId`
+- `POST /api/admin/residents/:residentId/passkeys/reset`
 - `GET /api/admin/surveys`
 - `POST /api/admin/surveys`
 - `PATCH /api/admin/surveys/:surveyId`
@@ -218,35 +213,19 @@ Behavior:
 - Deletes residents after vote cleanup
 - Stays in dry-run mode unless `RESIDENT_CLEANUP_CONFIRM=DELETE`
 
-## OTP Provider Setup
+## Passkey Configuration
 
-Set `OTP_SMS_PROVIDER` in `server/.env`:
+WebAuthn env vars in `server/.env`:
 
-- `twilio_whatsapp`
-- `twilio`
-- `vonage`
+- `WEBAUTHN_RP_ID` (example: `localhost` in dev, your domain in prod)
+- `WEBAUTHN_RP_NAME` (display name for authenticator prompt)
+- `WEBAUTHN_ORIGINS` (comma-separated allowed origins)
 
-Required env vars by provider:
+Local default:
 
-Twilio WhatsApp:
-
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_WHATSAPP_FROM_NUMBER` (or fallback `TWILIO_FROM_NUMBER`)
-
-Twilio SMS:
-
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`
-
-Vonage:
-
-- `VONAGE_API_KEY`
-- `VONAGE_API_SECRET`
-- `VONAGE_FROM_NUMBER`
-
-In non-production mode, OTP falls back to dev-safe behavior and may return `devCode`.
+- `WEBAUTHN_RP_ID=localhost`
+- `WEBAUTHN_RP_NAME=Resident Vote`
+- `WEBAUTHN_ORIGINS=http://localhost:3000`
 
 ## KK/RU Survey Localization
 
@@ -276,8 +255,9 @@ In non-production mode, OTP falls back to dev-safe behavior and may return `devC
    - `CLIENT_ORIGIN=https://<your-vercel-domain>`
    - `DATABASE_URL=...`
    - `SESSION_SECRET=...`
-   - `OTP_SMS_PROVIDER=...`
-   - provider credentials (`TWILIO_*`, `TWILIO_WHATSAPP_*`, or `VONAGE_*`)
+   - `WEBAUTHN_RP_ID=<your-domain>`
+   - `WEBAUTHN_RP_NAME=Resident Vote`
+   - `WEBAUTHN_ORIGINS=https://<your-vercel-domain>`
 
 ### Database lifecycle in production
 
@@ -309,9 +289,8 @@ npm run prisma:seed
   - missing env variable in server context
 - DB auth failed:
   - invalid DB credentials/URL
-- OTP send failure:
-  - provider env mismatch
-  - sender not approved (common in trial/sandbox accounts)
+- Passkey flow fails in browser:
+  - check HTTPS and correct `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGINS`
 - Admin password changed in env but login fails:
   - run `npm --prefix server run prisma:seed` to refresh bootstrap hash
 
@@ -320,7 +299,7 @@ npm run prisma:seed
 Current automated tests are server unit tests:
 
 - `server/tests/unit/phone.test.ts`
-- `server/tests/unit/otp-policy.test.ts`
+- `server/tests/unit/passkey-policy.test.ts`
 - `server/tests/unit/vote-policy.test.ts`
 
 Run tests:

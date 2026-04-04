@@ -4,7 +4,7 @@ This app is the backend service for the voting platform:
 
 - Express API (`/api/resident/*`, `/api/admin/*`)
 - Prisma ORM + PostgreSQL
-- OTP provider integration (Twilio or Vonage)
+- Passkey/WebAuthn resident authentication
 - Cookie-based resident/admin sessions backed by `AuthSession`
 - Survey, vote, resident, admin, and audit domain logic
 
@@ -47,8 +47,10 @@ Default API URL: `http://localhost:4000`
 
 - Resident auth/session:
   - `GET /api/resident/session`
-  - `POST /api/resident/auth/otp/request`
-  - `POST /api/resident/auth/otp/verify`
+  - `POST /api/resident/auth/passkey/register/options`
+  - `POST /api/resident/auth/passkey/register/verify`
+  - `POST /api/resident/auth/passkey/login/options`
+  - `POST /api/resident/auth/passkey/login/verify`
   - `POST /api/resident/auth/logout`
 - Resident surveys:
   - `GET /api/resident/surveys`
@@ -61,7 +63,9 @@ Default API URL: `http://localhost:4000`
   - `POST /api/admin/auth/logout`
 - Admin management:
   - `GET /api/admin/residents`
+  - `POST /api/admin/residents`
   - `PATCH /api/admin/residents/:residentId`
+  - `POST /api/admin/residents/:residentId/passkeys/reset`
   - `GET /api/admin/surveys`
   - `POST /api/admin/surveys`
   - `PATCH /api/admin/surveys/:surveyId`
@@ -72,8 +76,7 @@ Default API URL: `http://localhost:4000`
 ## Notes
 
 - One vote per house per survey is enforced by DB and API logic.
-- Dev mode can return `devCode` in OTP request response.
-- Production requires valid provider credentials and production-ready env values.
+- Production requires valid WebAuthn RP config and HTTPS origins.
 
 ## Railway deployment
 
@@ -84,8 +87,9 @@ Default API URL: `http://localhost:4000`
   - `CLIENT_ORIGIN=https://<your-vercel-domain>`
   - `DATABASE_URL=...`
   - `SESSION_SECRET=...`
-  - `OTP_SMS_PROVIDER=twilio_whatsapp` (or `twilio` / `vonage`)
-  - matching OTP credentials (`TWILIO_WHATSAPP_*`, `TWILIO_*`, or `VONAGE_*`)
+  - `WEBAUTHN_RP_ID=<your-domain>`
+  - `WEBAUTHN_RP_NAME=Resident Vote`
+  - `WEBAUTHN_ORIGINS=https://<your-vercel-domain>`
 
 Run DB deploy steps in Railway shell or CI:
 

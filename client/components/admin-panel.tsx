@@ -14,6 +14,7 @@ type ResidentRow = {
   phoneNormalized: string;
   status: ResidentStatus;
   votes: number;
+  passkeyCount: number;
 };
 
 type SurveyRow = {
@@ -116,6 +117,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
   const [error, setError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [addingResident, setAddingResident] = useState(false);
+  const [resettingResidentId, setResettingResidentId] = useState<string | null>(null);
   const [newResidentPhone, setNewResidentPhone] = useState("");
   const [newResidentHouseCode, setNewResidentHouseCode] = useState("");
 
@@ -193,6 +195,33 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
       setNewResidentHouseCode("");
     } finally {
       setAddingResident(false);
+    }
+  };
+
+  const resetResidentPasskeys = async (residentId: string) => {
+    const confirmed = window.confirm(t("admin.resetPasskeysConfirm"));
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setResettingResidentId(residentId);
+
+    try {
+      const response = await fetch(`/api/admin/residents/${residentId}/passkeys/reset`, {
+        method: "POST",
+        credentials: "include"
+      });
+      const payload = (await response.json().catch(() => ({}))) as ApiErrorResponse;
+
+      if (!response.ok) {
+        setError(payload.error ?? t("admin.resetPasskeysFailed"));
+        return;
+      }
+
+      setResidentRows((prev) => prev.map((row) => (row.id === residentId ? { ...row, passkeyCount: 0 } : row)));
+    } finally {
+      setResettingResidentId(null);
     }
   };
 
@@ -585,7 +614,9 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
                 <th className="pb-2">{t("admin.house")}</th>
                 <th className="pb-2">{t("admin.phone")}</th>
                 <th className="pb-2">{t("admin.votes")}</th>
+                <th className="pb-2">{t("admin.passkeys")}</th>
                 <th className="pb-2">{t("admin.status")}</th>
+                <th className="pb-2">{t("admin.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -594,6 +625,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
                   <td className="py-2">{row.houseCode}</td>
                   <td className="py-2">{row.phoneNormalized}</td>
                   <td className="py-2">{row.votes}</td>
+                  <td className="py-2">{row.passkeyCount}</td>
                   <td className="py-2">
                     <select
                       className="field-select"
@@ -604,6 +636,16 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
                       <option value="PENDING">{t("residentStatus.PENDING")}</option>
                       <option value="DISABLED">{t("residentStatus.DISABLED")}</option>
                     </select>
+                  </td>
+                  <td className="py-2">
+                    <button
+                      className="destructive-btn"
+                      disabled={resettingResidentId === row.id || row.passkeyCount === 0}
+                      onClick={() => resetResidentPasskeys(row.id)}
+                      type="button"
+                    >
+                      {resettingResidentId === row.id ? t("admin.resettingPasskeys") : t("admin.resetPasskeys")}
+                    </button>
                   </td>
                 </tr>
               ))}

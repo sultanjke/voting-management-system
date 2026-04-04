@@ -1,362 +1,261 @@
-﻿"use client";
+"use client";
 
+import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import type { ResidentPasskeyOptionsResponse, ResidentPasskeyVerifyResponse } from "@shared/contracts";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/components/language-provider";
 
-type RequestResponse = {
-  message?: string;
-  devCode?: string;
-  retryAfterSeconds?: number;
-  sessionIssued?: boolean;
+type ApiErrorResponse = {
   error?: string;
 };
 
-const OTP_LENGTH = 6;
 const SESSION_HINT_POPUP_FLAG = "rv_show_session_hint_popup";
 
 export function ResidentLogin() {
   const { t } = useI18n();
   const [phone, setPhone] = useState("");
   const [houseCode, setHouseCode] = useState("");
-  const [otpDigits, setOtpDigits] = useState<string[]>(Array.from({ length: OTP_LENGTH }, () => ""));
-  const [step, setStep] = useState<"request" | "verify">("request");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [otpSuccess, setOtpSuccess] = useState(false);
-  const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
-  const lastAttemptedCodeRef = useRef<string | null>(null);
-  const otpCode = otpDigits.join("");
+  const [passkeySupported, setPasskeySupported] = useState<boolean>(true);
 
   useEffect(() => {
-    if (step === "verify") {
-      otpInputRefs.current[0]?.focus();
-    }
-  }, [step]);
-
-  const setOtpDigit = (index: number, value: string) => {
-    if (loading || otpSuccess) {
-      return;
-    }
-
-    const normalized = value.replace(/\D/g, "");
-    if (!normalized) {
-      setOtpDigits((previous) => {
-        const next = [...previous];
-        next[index] = "";
-        return next;
-      });
-      return;
-    }
-
-    if (normalized.length > 1) {
-      setOtpDigits((previous) => {
-        const next = [...previous];
-        for (let position = index; position < OTP_LENGTH; position += 1) {
-          next[position] = normalized[position - index] ?? "";
-        }
-        return next;
-      });
-      otpInputRefs.current[Math.min(index + normalized.length, OTP_LENGTH - 1)]?.focus();
-      return;
-    }
-
-    setOtpDigits((previous) => {
-      const next = [...previous];
-      next[index] = normalized;
-      return next;
-    });
-
-    if (index < OTP_LENGTH - 1) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, key: string) => {
-    if (key === "Backspace") {
-      if (otpDigits[index]) {
-        setOtpDigits((previous) => {
-          const next = [...previous];
-          next[index] = "";
-          return next;
-        });
+    const checkPasskeySupport = async () => {
+      if (typeof window === "undefined") {
         return;
       }
 
-      if (index > 0) {
-        setOtpDigits((previous) => {
-          const next = [...previous];
-          next[index - 1] = "";
-          return next;
-        });
-        otpInputRefs.current[index - 1]?.focus();
+      if (!window.isSecureContext || typeof window.PublicKeyCredential === "undefined") {
+        setPasskeySupported(false);
+        return;
       }
-      return;
-    }
 
-    if (key === "ArrowLeft" && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
-      return;
-    }
+      if (typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== "function") {
+        setPasskeySupported(true);
+        return;
+      }
 
-    if (key === "ArrowRight" && index < OTP_LENGTH - 1) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
+      try {
+        const uvpaAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        setPasskeySupported(Boolean(uvpaAvailable));
+      } catch {
+        setPasskeySupported(false);
+      }
+    };
+
+    void checkPasskeySupport();
+  }, []);
+
+  const completeLogin = () => {
+    setInfo(t("residentLogin.success"));
+    window.setTimeout(() => {
+      try {
+        window.sessionStorage.setItem(SESSION_HINT_POPUP_FLAG, "1");
+      } catch {
+        // ignore browser storage issues
+      }
+      window.location.reload();
+    }, 700);
   };
 
-  const handleOtpPaste = (text: string) => {
-    if (loading || otpSuccess) {
-      return;
+  const mapPasskeyError = (fallbackKey: string, value: unknown) => {
+    if (value instanceof Error && value.name === "NotAllowedError") {
+      return t("residentLogin.passkeyCancelled");
     }
 
-    const normalized = text.replace(/\D/g, "").slice(0, OTP_LENGTH);
-    if (!normalized) {
-      return;
-    }
-
-    setOtpDigits((previous) => {
-      const next = [...previous];
-      for (let index = 0; index < OTP_LENGTH; index += 1) {
-        next[index] = normalized[index] ?? "";
-      }
-      return next;
-    });
-
-    otpInputRefs.current[Math.min(normalized.length, OTP_LENGTH) - 1]?.focus();
+    return t(fallbackKey);
   };
 
-  const requestOtp = async () => {
+  const signInWithPasskey = async () => {
+    if (!passkeySupported) {
+      setError(t("residentLogin.unsupported"));
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setInfo(null);
-    setOtpSuccess(false);
 
     try {
-      const response = await fetch("/api/resident/auth/otp/request", {
+      const optionsResponse = await fetch("/api/resident/auth/passkey/login/options", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+      const optionsPayload = (await optionsResponse.json().catch(() => ({}))) as
+        | (ResidentPasskeyOptionsResponse & ApiErrorResponse)
+        | ApiErrorResponse;
+
+      if (!optionsResponse.ok || !("challengeId" in optionsPayload) || !("options" in optionsPayload)) {
+        setError(optionsPayload.error ?? t("residentLogin.passkeySignInFailed"));
+        return;
+      }
+
+      const authenticationResponse = await startAuthentication(optionsPayload.options as any);
+
+      const verifyResponse = await fetch("/api/resident/auth/passkey/login/verify", {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ phone, houseCode })
+        body: JSON.stringify({
+          challengeId: optionsPayload.challengeId,
+          response: authenticationResponse
+        })
       });
+      const verifyPayload = (await verifyResponse.json().catch(() => ({}))) as ResidentPasskeyVerifyResponse & ApiErrorResponse;
 
-      const payload = (await response.json()) as RequestResponse;
-      if (!response.ok) {
-        const cooldownMessage =
-          payload.retryAfterSeconds && payload.retryAfterSeconds > 0
-            ? ` ${t("residentLogin.retryAfter", { seconds: payload.retryAfterSeconds })}`
-            : "";
-        setError(`${t("residentLogin.requestFailed")}${cooldownMessage}`);
+      if (!verifyResponse.ok || !verifyPayload.success) {
+        setError(verifyPayload.error ?? t("residentLogin.passkeySignInFailed"));
         return;
       }
 
-      if (payload.sessionIssued) {
-        setInfo(t("residentLogin.sessionRestored"));
-        window.setTimeout(() => {
-          try {
-            window.sessionStorage.setItem(SESSION_HINT_POPUP_FLAG, "1");
-          } catch {
-            // ignore browser storage issues
-          }
-          window.location.reload();
-        }, 700);
-        return;
-      }
-
-      setInfo(payload.devCode ? t("residentLogin.devCode", { code: payload.devCode }) : t("residentLogin.codeSent"));
-      setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ""));
-      lastAttemptedCodeRef.current = null;
-      setStep("verify");
+      completeLogin();
+    } catch (requestError) {
+      setError(mapPasskeyError("residentLogin.passkeySignInFailed", requestError));
     } finally {
       setLoading(false);
     }
   };
 
-  const verifyOtp = useCallback(
-    async (candidateCode = otpCode, options?: { silentFail?: boolean }) => {
-      const silentFail = options?.silentFail ?? false;
+  const enrollPasskey = async () => {
+    if (!passkeySupported) {
+      setError(t("residentLogin.unsupported"));
+      return;
+    }
 
-      if (candidateCode.length !== OTP_LENGTH) {
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      const optionsResponse = await fetch("/api/resident/auth/passkey/register/options", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          phone,
+          houseCode
+        })
+      });
+      const optionsPayload = (await optionsResponse.json().catch(() => ({}))) as
+        | (ResidentPasskeyOptionsResponse & ApiErrorResponse)
+        | ApiErrorResponse;
+
+      if (!optionsResponse.ok || !("challengeId" in optionsPayload) || !("options" in optionsPayload)) {
+        setError(optionsPayload.error ?? t("residentLogin.passkeyRegisterFailed"));
         return;
       }
 
-      setLoading(true);
-      setError(null);
+      const registrationResponse = await startRegistration(optionsPayload.options as any);
 
-      try {
-        const response = await fetch("/api/resident/auth/otp/verify", {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ phone, houseCode, code: candidateCode })
-        });
+      const verifyResponse = await fetch("/api/resident/auth/passkey/register/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          challengeId: optionsPayload.challengeId,
+          response: registrationResponse
+        })
+      });
+      const verifyPayload = (await verifyResponse.json().catch(() => ({}))) as ResidentPasskeyVerifyResponse & ApiErrorResponse;
 
-        if (!response.ok) {
-          if (!silentFail) {
-            setError(t("residentLogin.verifyFailed"));
-          }
-          return;
-        }
-
-        setOtpSuccess(true);
-        setInfo(t("residentLogin.success"));
-        window.setTimeout(() => {
-          try {
-            window.sessionStorage.setItem(SESSION_HINT_POPUP_FLAG, "1");
-          } catch {
-            // ignore browser storage issues
-          }
-          window.location.reload();
-        }, 1000);
-      } finally {
-        setLoading(false);
+      if (!verifyResponse.ok || !verifyPayload.success) {
+        setError(verifyPayload.error ?? t("residentLogin.passkeyRegisterFailed"));
+        return;
       }
-    },
-    [houseCode, otpCode, phone, t]
-  );
 
-  useEffect(() => {
-    if (step !== "verify" || loading || otpSuccess) {
-      return;
+      setInfo(t("residentLogin.passkeyRegistered"));
+      completeLogin();
+    } catch (requestError) {
+      setError(mapPasskeyError("residentLogin.passkeyRegisterFailed", requestError));
+    } finally {
+      setLoading(false);
     }
-
-    if (otpCode.length !== OTP_LENGTH) {
-      lastAttemptedCodeRef.current = null;
-      return;
-    }
-
-    if (lastAttemptedCodeRef.current === otpCode) {
-      return;
-    }
-
-    lastAttemptedCodeRef.current = otpCode;
-    void verifyOtp(otpCode, { silentFail: true });
-  }, [loading, otpCode, otpSuccess, step, verifyOtp]);
+  };
 
   return (
     <main className="app-shell relative flex min-h-[calc(100vh-4rem)] items-center justify-center">
       <div className="fixed right-4 top-4 z-30">
         <LanguageSwitcher />
       </div>
+
       <section className="glass-panel w-full max-w-xl p-7">
         <div className="mb-5">
-          <h1 className="text-3xl mb-5 font-bold">{t("residentLogin.title")}</h1>
+          <h1 className="mb-5 text-3xl font-bold">{t("residentLogin.title")}</h1>
           <p className="mt-2 text-sm text-slate-600">{t("residentLogin.subtitle")}</p>
         </div>
 
-        {step === "request" ? (
-          <div className="space-y-4">
-            <div>
-              <label className="field-label" htmlFor="phone-input">
-                {t("residentLogin.phoneLabel")}
-              </label>
-              <input
-                id="phone-input"
-                className="field-input"
-                placeholder="+7"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-              />
-            </div>
-            <div>
-              <label className="field-label" htmlFor="house-input">
-                {t("residentLogin.houseLabel")}
-              </label>
-              <input
-                id="house-input"
-                className="field-input"
-                placeholder="1 - 40"
-                value={houseCode}
-                onChange={(event) => setHouseCode(event.target.value)}
-              />
-            </div>
-
-            <button className="primary-btn w-full" disabled={loading} onClick={requestOtp} type="button">
-              {loading ? t("residentLogin.sending") : t("residentLogin.send")}
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <label className="field-label" htmlFor="otp-input-0">
-                {t("residentLogin.otpLabel")}
-              </label>
-              <div className="mt-2 grid grid-cols-6 gap-2 sm:gap-3">
-                {otpDigits.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(element) => {
-                      otpInputRefs.current[index] = element;
-                    }}
-                    autoComplete={index === 0 ? "one-time-code" : "off"}
-                    className={`h-12 rounded-xl border text-center text-xl font-semibold text-slate-900 transition-all duration-300 ${
-                      otpSuccess
-                        ? "border-emerald-500 ring-2 ring-emerald-200 shadow-[0_0_14px_rgba(34,197,94,0.28)]"
-                        : "border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    }`}
-                    disabled={loading || otpSuccess}
-                    id={`otp-input-${index}`}
-                    inputMode="numeric"
-                    maxLength={1}
-                    onChange={(event) => setOtpDigit(index, event.target.value)}
-                    onFocus={(event) => event.currentTarget.select()}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && otpCode.length === OTP_LENGTH) {
-                        void verifyOtp(otpCode, { silentFail: true });
-                        return;
-                      }
-                      handleOtpKeyDown(index, event.key);
-                    }}
-                    onPaste={(event) => {
-                      event.preventDefault();
-                      handleOtpPaste(event.clipboardData.getData("text"));
-                    }}
-                    pattern="[0-9]*"
-                    type="text"
-                    value={digit}
-                  />
-                ))}
-              </div>
-            </div>
-            {/* <p className="rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700">
-              {loading ? t("residentLogin.verifying") : t("residentLogin.autoVerifyHint")}
-            </p> */}
-            <button
-              className="secondary-btn w-full"
-              disabled={loading || otpSuccess}
-              onClick={() => {
-                setStep("request");
-                setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ""));
-                lastAttemptedCodeRef.current = null;
-                setOtpSuccess(false);
-                setInfo(null);
-                setError(null);
-              }}
-              type="button"
-            >
-              {t("residentLogin.back")}
-            </button>
-          </div>
-        )}
-
-        {info ? (
-          <p
-            className={`mt-4 rounded-xl px-3 py-2 text-sm ${
-              otpSuccess
-                ? "animate-pulse border border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "bg-blue-50 text-blue-800"
-            }`}
-          >
-            {info}
+        {!passkeySupported ? (
+          <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {t("residentLogin.unsupported")}
           </p>
         ) : null}
-        {error ? <p className="mt-4 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-800">{error}</p> : null}
+
+        <div className="space-y-4">
+          <button
+            className="primary-btn w-full"
+            disabled={loading || !passkeySupported}
+            onClick={signInWithPasskey}
+            type="button"
+          >
+            {loading ? t("residentLogin.passkeySigningIn") : t("residentLogin.passkeySignIn")}
+          </button>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-3 text-sm font-medium text-slate-700">{t("residentLogin.firstTimeTitle")}</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="field-label" htmlFor="phone-input">
+                  {t("residentLogin.phoneLabel")}
+                </label>
+                <input
+                  id="phone-input"
+                  className="field-input"
+                  placeholder="+7"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                />
+              </div>
+              <div>
+                <label className="field-label" htmlFor="house-input">
+                  {t("residentLogin.houseLabel")}
+                </label>
+                <input
+                  id="house-input"
+                  className="field-input"
+                  placeholder="1 - 40"
+                  value={houseCode}
+                  onChange={(event) => setHouseCode(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <button
+              className="secondary-btn mt-3 w-full"
+              disabled={loading || !passkeySupported || !phone.trim() || !houseCode.trim()}
+              onClick={enrollPasskey}
+              type="button"
+            >
+              {loading ? t("residentLogin.passkeyRegistering") : t("residentLogin.passkeyRegister")}
+            </button>
+          </div>
+        </div>
+
+        {info ? <p className="mt-4 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-800">{info}</p> : null}
+        {error ? <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
         <div className="mt-4 text-center">
           <Link
@@ -366,7 +265,6 @@ export function ResidentLogin() {
             {t("residentLogin.goToAdmin")}
           </Link>
         </div>
-
       </section>
     </main>
   );

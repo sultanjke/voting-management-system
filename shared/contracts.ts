@@ -4,6 +4,15 @@ export type SurveyStatus = "DRAFT" | "ACTIVE" | "CLOSED" | "ARCHIVED";
 export type ResidentStatus = "ACTIVE" | "PENDING" | "DISABLED";
 export type QuestionType = "SINGLE" | "SCALE" | "TEXT";
 
+export type ResidentPasskeyOptionsResponse = {
+  challengeId: string;
+  options: Record<string, unknown>;
+};
+
+export type ResidentPasskeyVerifyResponse = {
+  success: true;
+};
+
 export type ResidentSessionResponse =
   | { authenticated: false }
   | { authenticated: true; resident: { id: string; houseCode: string } };
@@ -73,6 +82,7 @@ export type AdminResidentRow = {
   phoneNormalized: string;
   status: ResidentStatus;
   votes: number;
+  passkeyCount: number;
 };
 
 export type AdminSurveyRow = {

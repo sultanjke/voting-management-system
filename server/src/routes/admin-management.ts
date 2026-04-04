@@ -109,7 +109,8 @@ adminManagementRouter.get("/residents", requireAdminSession, async (_request, re
       house: true,
       _count: {
         select: {
-          votes: true
+          votes: true,
+          passkeyCredentials: true
         }
       }
     },
@@ -124,7 +125,8 @@ adminManagementRouter.get("/residents", requireAdminSession, async (_request, re
       phoneNormalized: resident.phoneNormalized,
       status: resident.status,
       houseCode: resident.house.code,
-      votes: resident._count.votes
+      votes: resident._count.votes,
+      passkeyCount: resident._count.passkeyCredentials
     }))
   });
 });
@@ -167,7 +169,8 @@ adminManagementRouter.post("/residents", requireAdminSession, async (request, re
         house: true,
         _count: {
           select: {
-            votes: true
+            votes: true,
+            passkeyCredentials: true
           }
         }
       }
@@ -186,7 +189,8 @@ adminManagementRouter.post("/residents", requireAdminSession, async (request, re
         phoneNormalized: created.phoneNormalized,
         status: created.status,
         houseCode: created.house.code,
-        votes: created._count.votes
+        votes: created._count.votes,
+        passkeyCount: created._count.passkeyCredentials
       }
     });
   } catch (error) {
@@ -219,7 +223,8 @@ adminManagementRouter.patch("/residents/:residentId", requireAdminSession, async
       house: true,
       _count: {
         select: {
-          votes: true
+          votes: true,
+          passkeyCredentials: true
         }
       }
     }
@@ -238,8 +243,76 @@ adminManagementRouter.patch("/residents/:residentId", requireAdminSession, async
       houseCode: updated.house.code,
       phoneNormalized: updated.phoneNormalized,
       status: updated.status,
-      votes: updated._count.votes
+      votes: updated._count.votes,
+      passkeyCount: updated._count.passkeyCredentials
     }
+  });
+});
+
+adminManagementRouter.post("/residents/:residentId/passkeys/reset", requireAdminSession, async (request, response) => {
+  const residentId = request.params.residentId;
+
+  const resident = await prisma.resident.findUnique({
+    where: {
+      id: residentId
+    },
+    include: {
+      house: {
+        select: {
+          code: true
+        }
+      }
+    }
+  });
+
+  if (!resident) {
+    response.status(404).json({ error: "Resident not found." });
+    return;
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const deletedCredentials = await tx.passkeyCredential.deleteMany({
+      where: {
+        residentId
+      }
+    });
+
+    await tx.passkeyChallenge.deleteMany({
+      where: {
+        residentId
+      }
+    });
+
+    const revokedSessions = await tx.authSession.deleteMany({
+      where: {
+        residentId,
+        actorType: ActorType.RESIDENT
+      }
+    });
+
+    return {
+      deletedCredentials: deletedCredentials.count,
+      revokedSessions: revokedSessions.count
+    };
+  });
+
+  await writeAuditLog({
+    actorType: ActorType.ADMIN,
+    action: "admin.resident.passkeys.reset",
+    adminUserId: request.adminSession!.adminUser.id,
+    residentId,
+    metadata: {
+      houseCode: resident.house.code,
+      deletedCredentials: result.deletedCredentials,
+      revokedSessions: result.revokedSessions
+    }
+  });
+
+  response.json({
+    ok: true,
+    residentId,
+    deletedCredentials: result.deletedCredentials,
+    revokedSessions: result.revokedSessions
   });
 });
 

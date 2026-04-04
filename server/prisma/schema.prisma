@@ -36,29 +36,35 @@ enum AdminRole {
   SUPER_ADMIN
 }
 
+enum PasskeyChallengeFlow {
+  REGISTER
+  LOGIN
+}
+
 model House {
-  id            String         @id @default(cuid())
-  code          String         @unique
-  label         String?
-  residents     Resident[]
-  votes         Vote[]
-  otpChallenges OtpChallenge[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id        String     @id @default(cuid())
+  code      String     @unique
+  label     String?
+  residents Resident[]
+  votes     Vote[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 model Resident {
-  id              String         @id @default(cuid())
-  phoneNormalized String
-  phoneRaw        String
-  status          ResidentStatus @default(ACTIVE)
-  houseId         String
-  house           House           @relation(fields: [houseId], references: [id], onDelete: Restrict)
-  votes           Vote[]
-  sessions        AuthSession[]
-  auditLogs       AuditLog[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id                String              @id @default(cuid())
+  phoneNormalized   String
+  phoneRaw          String
+  status            ResidentStatus      @default(ACTIVE)
+  houseId           String
+  house             House               @relation(fields: [houseId], references: [id], onDelete: Restrict)
+  votes             Vote[]
+  sessions          AuthSession[]
+  auditLogs         AuditLog[]
+  passkeyCredentials PasskeyCredential[]
+  passkeyChallenges PasskeyChallenge[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@unique([phoneNormalized, houseId], map: "resident_phone_house_unique")
 }
@@ -130,30 +136,43 @@ model Vote {
 }
 
 model Answer {
-  id        String       @id @default(cuid())
-  voteId    String
-  vote      Vote         @relation(fields: [voteId], references: [id], onDelete: Cascade)
+  id         String        @id @default(cuid())
+  voteId     String
+  vote       Vote          @relation(fields: [voteId], references: [id], onDelete: Cascade)
   questionId String
-  question   Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  question   Question      @relation(fields: [questionId], references: [id], onDelete: Restrict)
   optionId   String?
   option     SurveyOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
   scaleValue Int?
   textValue  String?
 }
 
-model OtpChallenge {
-  id              String   @id @default(cuid())
-  phoneNormalized String
-  houseId         String
-  house           House    @relation(fields: [houseId], references: [id], onDelete: Restrict)
-  codeHash        String
-  provider        String
-  expiresAt       DateTime
-  verifiedAt      DateTime?
-  attempts        Int      @default(0)
-  createdAt       DateTime @default(now())
+model PasskeyCredential {
+  id          String   @id @default(cuid())
+  residentId  String
+  resident    Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  credentialId String  @unique
+  publicKey   String
+  counter     Int      @default(0)
+  transports  Json?
+  deviceName  String?
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
 
-  @@index([phoneNormalized, houseId, createdAt])
+  @@index([residentId, createdAt])
+}
+
+model PasskeyChallenge {
+  id         String               @id @default(cuid())
+  flow       PasskeyChallengeFlow
+  residentId String?
+  resident   Resident?            @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  challenge  String               @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime             @default(now())
+
+  @@index([residentId, flow, createdAt])
 }
 
 model AuthSession {

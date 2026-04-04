@@ -1,32 +1,29 @@
 import { z } from "zod";
 import { Router } from "express";
-import { ResidentStatus } from "@prisma/client";
 
-import { requestResidentOtp, verifyResidentOtp } from "@/lib/otp";
 import { RESIDENT_SESSION_COOKIE } from "@/lib/constants";
-import { normalizeHouseCode, normalizePhone } from "@/lib/phone";
-import { prisma } from "@/lib/prisma";
 import {
   clearResidentSessionCookie,
-  getResidentTrustedTokenFromRequest,
   getResidentSessionForRequest,
   issueResidentSession,
-  issueResidentTrustedToken,
   revokeSession,
-  resolveResidentTrustedToken,
-  setResidentSessionCookie,
-  setResidentTrustedCookie
+  setResidentSessionCookie
 } from "@/src/services/session";
+import {
+  beginResidentPasskeyLogin,
+  beginResidentPasskeyRegistration,
+  completeResidentPasskeyLogin,
+  completeResidentPasskeyRegistration
+} from "@/src/services/passkey";
 
-const requestSchema = z.object({
+const registerOptionsSchema = z.object({
   phone: z.string().min(4),
   houseCode: z.string().min(1)
 });
 
 const verifySchema = z.object({
-  phone: z.string().min(4),
-  houseCode: z.string().min(1),
-  code: z.string().length(6)
+  challengeId: z.string().min(1),
+  response: z.unknown()
 });
 
 export const residentAuthRouter = Router();
@@ -47,92 +44,65 @@ residentAuthRouter.get("/session", async (request, response) => {
   });
 });
 
-residentAuthRouter.post("/auth/otp/request", async (request, response) => {
-  const payload = requestSchema.safeParse(request.body);
+residentAuthRouter.post("/auth/passkey/register/options", async (request, response) => {
+  const payload = registerOptionsSchema.safeParse(request.body);
   if (!payload.success) {
-    response.status(400).json({ error: "Invalid OTP request payload." });
+    response.status(400).json({ error: "Invalid passkey registration payload." });
     return;
   }
 
-  const phoneNormalized = normalizePhone(payload.data.phone);
-  const houseCode = normalizeHouseCode(payload.data.houseCode);
-  const trustedToken = getResidentTrustedTokenFromRequest(request);
-  const trusted = resolveResidentTrustedToken(trustedToken);
-
-  if (
-    trusted &&
-    trusted.phoneNormalized === phoneNormalized &&
-    trusted.houseCode === houseCode
-  ) {
-    const trustedResident = await prisma.resident.findFirst({
-      where: {
-        id: trusted.residentId,
-        phoneNormalized,
-        status: ResidentStatus.ACTIVE,
-        house: {
-          code: houseCode
-        }
-      }
-    });
-
-    if (trustedResident) {
-      const sessionToken = await issueResidentSession(trustedResident.id);
-      setResidentSessionCookie(response, sessionToken);
-
-      const refreshedTrustedToken = issueResidentTrustedToken({
-        residentId: trustedResident.id,
-        phoneNormalized,
-        houseCode
-      });
-      setResidentTrustedCookie(response, refreshedTrustedToken);
-
-      response.json({
-        message: "Session restored from trusted device.",
-        sessionIssued: true
-      });
-      return;
-    }
-  }
-
-  const result = await requestResidentOtp(payload.data.phone, payload.data.houseCode);
-  if (!result.ok) {
-    response.status(result.status).json({
-      error: result.message,
-      retryAfterSeconds: result.retryAfterSeconds
-    });
-    return;
-  }
-
-  response.json({
-    message: "Verification code sent.",
-    devCode: result.devCode,
-    sessionIssued: false
-  });
-});
-
-residentAuthRouter.post("/auth/otp/verify", async (request, response) => {
-  const payload = verifySchema.safeParse(request.body);
-  if (!payload.success) {
-    response.status(400).json({ error: "Invalid OTP verification payload." });
-    return;
-  }
-
-  const result = await verifyResidentOtp(payload.data.phone, payload.data.houseCode, payload.data.code);
+  const result = await beginResidentPasskeyRegistration(payload.data.phone, payload.data.houseCode);
   if (!result.ok) {
     response.status(result.status).json({ error: result.message });
     return;
   }
 
-  const token = await issueResidentSession(result.residentId);
+  response.json(result.data);
+});
+
+residentAuthRouter.post("/auth/passkey/register/verify", async (request, response) => {
+  const payload = verifySchema.safeParse(request.body);
+  if (!payload.success) {
+    response.status(400).json({ error: "Invalid passkey registration verification payload." });
+    return;
+  }
+
+  const result = await completeResidentPasskeyRegistration(payload.data.challengeId, payload.data.response);
+  if (!result.ok) {
+    response.status(result.status).json({ error: result.message });
+    return;
+  }
+
+  const token = await issueResidentSession(result.data.residentId);
   setResidentSessionCookie(response, token);
+  response.json({ success: true });
+});
 
-  const trustedToken = issueResidentTrustedToken({
-    residentId: result.residentId,
-    phoneNormalized: result.phoneNormalized,
-    houseCode: result.houseCode
-  });
-  setResidentTrustedCookie(response, trustedToken);
+residentAuthRouter.post("/auth/passkey/login/options", async (_request, response) => {
+  const result = await beginResidentPasskeyLogin();
+  if (!result.ok) {
+    response.status(result.status).json({ error: result.message });
+    return;
+  }
 
+  response.json(result.data);
+});
+
+residentAuthRouter.post("/auth/passkey/login/verify", async (request, response) => {
+  const payload = verifySchema.safeParse(request.body);
+  if (!payload.success) {
+    response.status(400).json({ error: "Invalid passkey login verification payload." });
+    return;
+  }
+
+  const result = await completeResidentPasskeyLogin(payload.data.challengeId, payload.data.response);
+  if (!result.ok) {
+    response.status(result.status).json({ error: result.message });
+    return;
+  }
+
+  const token = await issueResidentSession(result.data.residentId);
+  setResidentSessionCookie(response, token);
   response.json({ success: true });
 });
 
