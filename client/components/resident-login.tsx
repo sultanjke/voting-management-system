@@ -1,12 +1,12 @@
 "use client";
 
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
+import type { ResidentPasskeyOptionsResponse, ResidentPasskeyVerifyResponse } from "@shared/contracts";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { ResidentPasskeyOptionsResponse, ResidentPasskeyVerifyResponse } from "@shared/contracts";
 
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/components/language-provider";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 type ApiErrorResponse = {
   error?: string;
@@ -20,7 +20,7 @@ export function ResidentLogin() {
   const [houseCode, setHouseCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<"signin" | "register" | null>(null);
-  const [expandedSection, setExpandedSection] = useState<"signin" | "register" | null>(null);
+  const [isRegisterExpanded, setIsRegisterExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [passkeySupported, setPasskeySupported] = useState<boolean>(true);
@@ -191,8 +191,8 @@ export function ResidentLogin() {
     }
   };
 
-  const toggleSection = (section: "signin" | "register") => {
-    setExpandedSection((current) => (current === section ? null : section));
+  const toggleRegisterSection = () => {
+    setIsRegisterExpanded((current) => !current);
     setError(null);
     setInfo(null);
   };
@@ -216,67 +216,35 @@ export function ResidentLogin() {
         ) : null}
 
         <div className="space-y-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <button
-              aria-controls="passkey-signin-panel"
-              aria-expanded={expandedSection === "signin"}
-              className="secondary-btn flex w-full items-center justify-between text-left"
-              disabled={loading || !passkeySupported}
-              onClick={() => toggleSection("signin")}
-              type="button"
-            >
-              <span>{t("residentLogin.passkeySignIn")}</span>
-              <span
-                aria-hidden="true"
-                className={`inline-block text-sm text-slate-500 transition-transform duration-200 ${
-                  expandedSection === "signin" ? "rotate-180" : ""
-                }`}
-              >
-                ▼
-              </span>
-            </button>
-
-            <div
-              className={`overflow-hidden transition-all duration-300 ${
-                expandedSection === "signin" ? "mt-3 max-h-24 opacity-100" : "max-h-0 opacity-0"
-              }`}
-              id="passkey-signin-panel"
-            >
-              <button
-                className="primary-btn w-full"
-                disabled={loading || !passkeySupported}
-                onClick={signInWithPasskey}
-                type="button"
-              >
-                {loadingAction === "signin" ? t("residentLogin.passkeySigningIn") : t("residentLogin.passkeySignIn")}
-              </button>
-            </div>
-          </div>
+          <button
+            className="primary-btn w-full"
+            disabled={loading || !passkeySupported}
+            onClick={signInWithPasskey}
+            type="button"
+          >
+            {loadingAction === "signin" ? t("residentLogin.passkeySigningIn") : t("residentLogin.passkeySignIn")}
+          </button>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <button
               aria-controls="passkey-register-panel"
-              aria-expanded={expandedSection === "register"}
+              aria-expanded={isRegisterExpanded}
               className="secondary-btn flex w-full items-center justify-between text-left"
               disabled={loading || !passkeySupported}
-              onClick={() => toggleSection("register")}
+              onClick={toggleRegisterSection}
               type="button"
             >
               <span>{t("residentLogin.passkeyRegister")}</span>
               <span
                 aria-hidden="true"
-                className={`inline-block text-sm text-slate-500 transition-transform duration-200 ${
-                  expandedSection === "register" ? "rotate-180" : ""
-                }`}
+                className={`inline-block text-sm text-slate-500 transition-transform duration-200 ${isRegisterExpanded ? "rotate-180" : ""}`}
               >
-                ▼
+                v
               </span>
             </button>
 
             <div
-              className={`overflow-hidden transition-all duration-300 ${
-                expandedSection === "register" ? "mt-3 max-h-[26rem] opacity-100" : "max-h-0 opacity-0"
-              }`}
+              className={`overflow-hidden transition-all duration-300 ${isRegisterExpanded ? "mt-3 max-h-[26rem] opacity-100" : "max-h-0 opacity-0"}`}
               id="passkey-register-panel"
             >
               <p className="mb-3 text-sm font-medium text-slate-700">{t("residentLogin.firstTimeTitle")}</p>
@@ -289,9 +257,9 @@ export function ResidentLogin() {
                   <input
                     id="phone-input"
                     className="field-input"
+                    onChange={(event) => setPhone(event.target.value)}
                     placeholder="+7"
                     value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
                   />
                 </div>
                 <div>
@@ -301,9 +269,9 @@ export function ResidentLogin() {
                   <input
                     id="house-input"
                     className="field-input"
+                    onChange={(event) => setHouseCode(event.target.value)}
                     placeholder="1 - 40"
                     value={houseCode}
-                    onChange={(event) => setHouseCode(event.target.value)}
                   />
                 </div>
               </div>
