@@ -68,6 +68,7 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
   const { t, lang } = useI18n();
   const participation = survey.totalEligible > 0 ? Math.round((survey.voteCount / survey.totalEligible) * 100) : 0;
   const deadlineText = survey.deadline ? formatLocalizedDateTime(survey.deadline, lang) : null;
+  const csvDownloadHref = `/api/admin/surveys/${survey.id}/results/csv?lang=${lang}`;
 
   const renderAnswerValue = (answer: SurveyVoteAnswer): string => {
     if (answer.optionLabel) {
@@ -101,6 +102,9 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
             <span className={statusBadgeClass(survey.status)}>{statusLabel(survey.status, t)}</span>
+            <a className="secondary-btn whitespace-nowrap" href={csvDownloadHref}>
+              {t("admin.downloadCsv")}
+            </a>
             <Link className="secondary-btn" href="/admin">
               {t("admin.backToSurveys")}
             </Link>

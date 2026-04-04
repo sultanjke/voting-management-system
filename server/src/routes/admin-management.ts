@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { writeAuditLog } from "@/lib/audit";
 import type { Lang } from "@/lib/i18n";
+import { decodeLocalizedText } from "@/lib/localized-text";
 import { normalizeHouseCode, normalizePhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { localizeSurveyContent, localizeSurveyTextPatch } from "@/lib/survey-localization";
@@ -99,6 +100,16 @@ async function createUniqueSlug(input: string): Promise<string> {
     candidate = `${trimmedBase}${suffixText}`;
     suffix += 1;
   }
+}
+
+function toCsvCell(value: string | number | null | undefined): string {
+  const text = value == null ? "" : String(value);
+  const escaped = text.replace(/"/g, "\"\"");
+  return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
+}
+
+function buildCsv(rows: Array<Array<string | number | null | undefined>>): string {
+  return rows.map((row) => row.map((cell) => toCsvCell(cell)).join(",")).join("\r\n");
 }
 
 export const adminManagementRouter = Router();
@@ -665,4 +676,126 @@ adminManagementRouter.get("/surveys/:surveyId/results", requireAdminSession, asy
       }))
     }
   });
+});
+
+adminManagementRouter.get("/surveys/:surveyId/results/csv", requireAdminSession, async (request, response) => {
+  const surveyId = request.params.surveyId;
+  const requestedLang = Array.isArray(request.query.lang) ? request.query.lang[0] : request.query.lang;
+  const lang: Lang = requestedLang === "ru" ? "ru" : "kk";
+
+  const survey = await prisma.survey.findUnique({
+    where: { id: surveyId },
+    include: {
+      questions: {
+        orderBy: {
+          position: "asc"
+        },
+        select: {
+          id: true,
+          text: true
+        }
+      },
+      votes: {
+        orderBy: {
+          submittedAt: "desc"
+        },
+        include: {
+          house: {
+            select: {
+              code: true
+            }
+          },
+          answers: {
+            select: {
+              questionId: true,
+              option: {
+                select: {
+                  label: true
+                }
+              },
+              scaleValue: true,
+              textValue: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!survey) {
+    response.status(404).json({ error: "Survey not found." });
+    return;
+  }
+
+  const localizedTitle = decodeLocalizedText(survey.title, lang) ?? survey.title;
+  const rows: Array<Array<string | number | null | undefined>> = [
+    [
+      "survey_id",
+      "survey_slug",
+      "survey_title",
+      "survey_status",
+      "survey_deadline_utc",
+      "vote_id",
+      "house_code",
+      "submitted_at_utc",
+      "question_id",
+      "question_text",
+      "answer_type",
+      "answer_value",
+      "option_label",
+      "scale_value",
+      "text_value"
+    ]
+  ];
+
+  for (const vote of survey.votes) {
+    const answersByQuestion = new Map(vote.answers.map((answer) => [answer.questionId, answer]));
+
+    for (const question of survey.questions) {
+      const questionText = decodeLocalizedText(question.text, lang) ?? question.text;
+      const answer = answersByQuestion.get(question.id);
+      const optionLabel = answer?.option?.label ? (decodeLocalizedText(answer.option.label, lang) ?? answer.option.label) : "";
+      const scaleValue = typeof answer?.scaleValue === "number" ? answer.scaleValue : "";
+      const textValue = answer?.textValue ?? "";
+      const answerType = optionLabel ? "SINGLE" : scaleValue !== "" ? "SCALE" : textValue ? "TEXT" : "EMPTY";
+      const answerValue = optionLabel || scaleValue || textValue;
+
+      rows.push([
+        survey.id,
+        survey.slug,
+        localizedTitle,
+        survey.status,
+        survey.deadline ? survey.deadline.toISOString() : "",
+        vote.id,
+        vote.house.code,
+        vote.submittedAt.toISOString(),
+        question.id,
+        questionText,
+        answerType,
+        answerValue,
+        optionLabel,
+        scaleValue,
+        textValue
+      ]);
+    }
+  }
+
+  const csv = `\uFEFF${buildCsv(rows)}`;
+  const filename = `survey-${survey.slug}-results-${lang}.csv`;
+
+  await writeAuditLog({
+    actorType: ActorType.ADMIN,
+    action: "admin.survey.results.csv.exported",
+    adminUserId: request.adminSession!.adminUser.id,
+    metadata: {
+      surveyId: survey.id,
+      slug: survey.slug,
+      lang,
+      rowCount: rows.length - 1
+    }
+  });
+
+  response.setHeader("Content-Type", "text/csv; charset=utf-8");
+  response.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  response.status(200).send(csv);
 });
