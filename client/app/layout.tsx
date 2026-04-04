@@ -11,7 +11,7 @@ const ui = Noto_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Voting Application System",
+  title: "anpz.me",
   description: "An application for managing resident surveys and voting in residential buildings."
 };
 

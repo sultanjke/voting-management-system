@@ -5,6 +5,7 @@ import type { ResidentPasskeyOptionsResponse, ResidentPasskeyVerifyResponse } fr
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { FloatingToast } from "@/components/floating-toast";
 import { useI18n } from "@/components/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
@@ -199,6 +200,9 @@ export function ResidentLogin() {
 
   return (
     <main className="app-shell relative flex min-h-[calc(100vh-4rem)] items-center justify-center">
+      <FloatingToast autoHideMs={2200} message={info} onClose={() => setInfo(null)} tone="success" />
+      <FloatingToast autoHideMs={5000} message={error} onClose={() => setError(null)} tone="error" />
+
       <div className="fixed right-4 top-4 z-30">
         <LanguageSwitcher />
       </div>
@@ -287,9 +291,6 @@ export function ResidentLogin() {
             </div>
           </div>
         </div>
-
-        {info ? <p className="mt-4 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-800">{info}</p> : null}
-        {error ? <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
         <div className="mt-4 text-center">
           <Link

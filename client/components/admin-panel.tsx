@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { ParticipationRow, ResidentStatus, SurveyStatus } from "@shared/contracts";
 
+import { FloatingToast } from "@/components/floating-toast";
 import { useI18n } from "@/components/language-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { decodeLocalizedText } from "@/lib/localized-text";
@@ -115,6 +116,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
   const [saving, setSaving] = useState(false);
   const [deletingSurveyId, setDeletingSurveyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [addingResident, setAddingResident] = useState(false);
   const [resettingResidentId, setResettingResidentId] = useState<string | null>(null);
@@ -154,6 +156,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
 
   const updateResident = async (residentId: string, nextStatus: ResidentStatus) => {
     setError(null);
+    setSuccess(null);
     const response = await fetch(`/api/admin/residents/${residentId}`, {
       method: "PATCH",
       credentials: "include",
@@ -167,10 +170,12 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
     }
 
     setResidentRows((prev) => prev.map((row) => (row.id === residentId ? { ...row, status: nextStatus } : row)));
+    setSuccess(t("admin.operationSuccess"));
   };
 
   const createResident = async () => {
     setError(null);
+    setSuccess(null);
     setAddingResident(true);
 
     try {
@@ -193,6 +198,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
       setResidentRows((prev) => [payload.resident!, ...prev]);
       setNewResidentPhone("");
       setNewResidentHouseCode("");
+      setSuccess(t("admin.operationSuccess"));
     } finally {
       setAddingResident(false);
     }
@@ -205,6 +211,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
     }
 
     setError(null);
+    setSuccess(null);
     setResettingResidentId(residentId);
 
     try {
@@ -220,6 +227,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
       }
 
       setResidentRows((prev) => prev.map((row) => (row.id === residentId ? { ...row, passkeyCount: 0 } : row)));
+      setSuccess(t("admin.operationSuccess"));
     } finally {
       setResettingResidentId(null);
     }
@@ -227,6 +235,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
 
   const updateSurveyStatus = async (surveyId: string, nextStatus: SurveyStatus) => {
     setError(null);
+    setSuccess(null);
     const response = await fetch(`/api/admin/surveys/${surveyId}`, {
       method: "PATCH",
       credentials: "include",
@@ -241,10 +250,12 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
     }
 
     setSurveyRows((prev) => prev.map((row) => (row.id === surveyId ? { ...row, status: nextStatus } : row)));
+    setSuccess(t("admin.operationSuccess"));
   };
 
   const deleteSurvey = async (survey: SurveyRow) => {
     setError(null);
+    setSuccess(null);
     const localizedTitle = decodeLocalizedText(survey.title, lang) ?? survey.title;
     const confirmed = window.confirm(t("admin.deleteSurveyConfirm", { title: localizedTitle }));
     if (!confirmed) {
@@ -266,6 +277,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
 
       setSurveyRows((prev) => prev.filter((row) => row.id !== survey.id));
       setAnalyticsRows((prev) => prev.filter((row) => row.surveyId !== survey.id));
+      setSuccess(t("admin.operationSuccess"));
     } finally {
       setDeletingSurveyId(null);
     }
@@ -395,6 +407,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
   const createSurvey = async () => {
     setSaving(true);
     setError(null);
+    setSuccess(null);
     setCreateError(null);
 
     try {
@@ -457,6 +470,7 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
       setDeadline("");
       setQuestions(createInitialQuestions());
       setBuilderStep(1);
+      setSuccess(t("admin.operationSuccess"));
     } catch {
       setCreateError(t("admin.invalidQuestionForm"));
     } finally {
@@ -523,6 +537,9 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
 
   return (
     <main className="app-shell space-y-4">
+      <FloatingToast autoHideMs={2200} message={success} onClose={() => setSuccess(null)} tone="success" />
+      <FloatingToast autoHideMs={6000} message={error} onClose={() => setError(null)} tone="error" />
+
       <section className="glass-panel p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -553,8 +570,6 @@ export function AdminPanel({ adminEmail, residents, surveys, analytics }: Props)
           <p className="mt-1 text-3xl font-semibold">{stats.activeSurveys}</p>
         </article>
       </section>
-
-      {error ? <p className="rounded-xl bg-blue-50 p-3 text-sm text-blue-800">{error}</p> : null}
 
       <section className="glass-panel p-5">
         <h2 className="text-2xl">{t("admin.participation")}</h2>

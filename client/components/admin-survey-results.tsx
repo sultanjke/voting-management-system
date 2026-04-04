@@ -111,7 +111,6 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
           </div>
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
-            <span className={statusBadgeClass(survey.status)}>{statusLabel(survey.status, t)}</span>
             <a className="secondary-btn inline-flex items-center gap-2 whitespace-nowrap" href={csvDownloadHref}>
               <ExcelIcon />
               {t("admin.downloadCsv")}
@@ -119,6 +118,7 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
             <Link className="secondary-btn" href="/admin">
               {t("admin.backToSurveys")}
             </Link>
+            <span className={statusBadgeClass(survey.status)}>{statusLabel(survey.status, t)}</span>
           </div>
         </div>
       </section>
