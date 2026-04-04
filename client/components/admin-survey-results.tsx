@@ -97,9 +97,9 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
     <main className="app-shell space-y-4">
       <section className="glass-panel p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.15em] text-slate-500">{t("admin.voteDetails")}</p>
-            <h1 className="text-3xl">{decodeLocalizedText(survey.title, lang) ?? survey.title}</h1>
+            <h1 className="break-words text-3xl">{decodeLocalizedText(survey.title, lang) ?? survey.title}</h1>
             <p className="mt-1 text-sm text-slate-600">
               {survey.voteCount}/{survey.totalEligible} ({participation}%)
             </p>
@@ -109,8 +109,9 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
               </p>
             ) : null}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             <LanguageSwitcher />
+            <span className={`${statusBadgeClass(survey.status)} whitespace-nowrap`}>{statusLabel(survey.status, t)}</span>
             <a className="secondary-btn inline-flex items-center gap-2 whitespace-nowrap" href={csvDownloadHref}>
               <ExcelIcon />
               {t("admin.downloadCsv")}
@@ -118,7 +119,6 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
             <Link className="secondary-btn" href="/admin">
               {t("admin.backToSurveys")}
             </Link>
-            <span className={statusBadgeClass(survey.status)}>{statusLabel(survey.status, t)}</span>
           </div>
         </div>
       </section>
