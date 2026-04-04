@@ -64,6 +64,16 @@ function statusBadgeClass(status: SurveyStatus): string {
   return "badge badge-draft";
 }
 
+function ExcelIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="2" width="18" height="20" rx="3" fill="#1F9D55" />
+      <path d="M9 8L15 16M15 8L9 16" stroke="white" strokeWidth="2" strokeLinecap="round" />
+      <path d="M13 2V8H21" stroke="#E5F7EC" strokeWidth="2" />
+    </svg>
+  );
+}
+
 export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
   const { t, lang } = useI18n();
   const participation = survey.totalEligible > 0 ? Math.round((survey.voteCount / survey.totalEligible) * 100) : 0;
@@ -102,7 +112,8 @@ export function AdminSurveyResults({ survey }: { survey: SurveyDetails }) {
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
             <span className={statusBadgeClass(survey.status)}>{statusLabel(survey.status, t)}</span>
-            <a className="secondary-btn whitespace-nowrap" href={csvDownloadHref}>
+            <a className="secondary-btn inline-flex items-center gap-2 whitespace-nowrap" href={csvDownloadHref}>
+              <ExcelIcon />
               {t("admin.downloadCsv")}
             </a>
             <Link className="secondary-btn" href="/admin">

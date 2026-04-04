@@ -19,6 +19,8 @@ export function ResidentLogin() {
   const [phone, setPhone] = useState("");
   const [houseCode, setHouseCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<"signin" | "register" | null>(null);
+  const [expandedSection, setExpandedSection] = useState<"signin" | "register" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [passkeySupported, setPasskeySupported] = useState<boolean>(true);
@@ -77,6 +79,7 @@ export function ResidentLogin() {
     }
 
     setLoading(true);
+    setLoadingAction("signin");
     setError(null);
     setInfo(null);
 
@@ -122,6 +125,7 @@ export function ResidentLogin() {
       setError(mapPasskeyError("residentLogin.passkeySignInFailed", requestError));
     } finally {
       setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -132,6 +136,7 @@ export function ResidentLogin() {
     }
 
     setLoading(true);
+    setLoadingAction("register");
     setError(null);
     setInfo(null);
 
@@ -182,7 +187,14 @@ export function ResidentLogin() {
       setError(mapPasskeyError("residentLogin.passkeyRegisterFailed", requestError));
     } finally {
       setLoading(false);
+      setLoadingAction(null);
     }
+  };
+
+  const toggleSection = (section: "signin" | "register") => {
+    setExpandedSection((current) => (current === section ? null : section));
+    setError(null);
+    setInfo(null);
   };
 
   return (
@@ -203,54 +215,108 @@ export function ResidentLogin() {
           </p>
         ) : null}
 
-        <div className="space-y-4">
-          <button
-            className="primary-btn w-full"
-            disabled={loading || !passkeySupported}
-            onClick={signInWithPasskey}
-            type="button"
-          >
-            {loading ? t("residentLogin.passkeySigningIn") : t("residentLogin.passkeySignIn")}
-          </button>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="mb-3 text-sm font-medium text-slate-700">{t("residentLogin.firstTimeTitle")}</p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="field-label" htmlFor="phone-input">
-                  {t("residentLogin.phoneLabel")}
-                </label>
-                <input
-                  id="phone-input"
-                  className="field-input"
-                  placeholder="+7"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="house-input">
-                  {t("residentLogin.houseLabel")}
-                </label>
-                <input
-                  id="house-input"
-                  className="field-input"
-                  placeholder="1 - 40"
-                  value={houseCode}
-                  onChange={(event) => setHouseCode(event.target.value)}
-                />
-              </div>
-            </div>
-
+        <div className="space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <button
-              className="secondary-btn mt-3 w-full"
-              disabled={loading || !passkeySupported || !phone.trim() || !houseCode.trim()}
-              onClick={enrollPasskey}
+              aria-controls="passkey-signin-panel"
+              aria-expanded={expandedSection === "signin"}
+              className="secondary-btn flex w-full items-center justify-between text-left"
+              disabled={loading || !passkeySupported}
+              onClick={() => toggleSection("signin")}
               type="button"
             >
-              {loading ? t("residentLogin.passkeyRegistering") : t("residentLogin.passkeyRegister")}
+              <span>{t("residentLogin.passkeySignIn")}</span>
+              <span
+                aria-hidden="true"
+                className={`inline-block text-sm text-slate-500 transition-transform duration-200 ${
+                  expandedSection === "signin" ? "rotate-180" : ""
+                }`}
+              >
+                ▼
+              </span>
             </button>
+
+            <div
+              className={`overflow-hidden transition-all duration-300 ${
+                expandedSection === "signin" ? "mt-3 max-h-24 opacity-100" : "max-h-0 opacity-0"
+              }`}
+              id="passkey-signin-panel"
+            >
+              <button
+                className="primary-btn w-full"
+                disabled={loading || !passkeySupported}
+                onClick={signInWithPasskey}
+                type="button"
+              >
+                {loadingAction === "signin" ? t("residentLogin.passkeySigningIn") : t("residentLogin.passkeySignIn")}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <button
+              aria-controls="passkey-register-panel"
+              aria-expanded={expandedSection === "register"}
+              className="secondary-btn flex w-full items-center justify-between text-left"
+              disabled={loading || !passkeySupported}
+              onClick={() => toggleSection("register")}
+              type="button"
+            >
+              <span>{t("residentLogin.passkeyRegister")}</span>
+              <span
+                aria-hidden="true"
+                className={`inline-block text-sm text-slate-500 transition-transform duration-200 ${
+                  expandedSection === "register" ? "rotate-180" : ""
+                }`}
+              >
+                ▼
+              </span>
+            </button>
+
+            <div
+              className={`overflow-hidden transition-all duration-300 ${
+                expandedSection === "register" ? "mt-3 max-h-[26rem] opacity-100" : "max-h-0 opacity-0"
+              }`}
+              id="passkey-register-panel"
+            >
+              <p className="mb-3 text-sm font-medium text-slate-700">{t("residentLogin.firstTimeTitle")}</p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="field-label" htmlFor="phone-input">
+                    {t("residentLogin.phoneLabel")}
+                  </label>
+                  <input
+                    id="phone-input"
+                    className="field-input"
+                    placeholder="+7"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="house-input">
+                    {t("residentLogin.houseLabel")}
+                  </label>
+                  <input
+                    id="house-input"
+                    className="field-input"
+                    placeholder="1 - 40"
+                    value={houseCode}
+                    onChange={(event) => setHouseCode(event.target.value)}
+                  />
+                </div>
+              </div>
+
+              <button
+                className="primary-btn mt-3 w-full"
+                disabled={loading || !passkeySupported || !phone.trim() || !houseCode.trim()}
+                onClick={enrollPasskey}
+                type="button"
+              >
+                {loadingAction === "register" ? t("residentLogin.passkeyRegistering") : t("residentLogin.passkeyRegister")}
+              </button>
+            </div>
           </div>
         </div>
 
