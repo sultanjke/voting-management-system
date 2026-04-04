@@ -1,64 +1,66 @@
 # Voting Management System
 
-Production-ready resident voting platform with bilingual UI (Kazakh/Russian), passkey login, household vote integrity, and admin management tooling.
+Production-ready bilingual voting platform for residential communities with true frontend/backend separation, passkey resident authentication, and admin governance tools.
 
-## Overview
-
-This repository is a true frontend/backend split monorepo:
+## Architecture
 
 - `client/` - Next.js 15 UI-only app
 - `server/` - Express API + Prisma + PostgreSQL
-- `shared/` - shared TypeScript contracts (DTOs)
+- `shared/` - Shared TypeScript API contracts
 
-The frontend never talks directly to Prisma or the database. It calls `/api/*`, and Next.js rewrites those requests to the Express API.
+Client never accesses database code directly. Browser calls `/api/*` on the client domain, and Next.js rewrites requests to the Express API.
 
-## Product Capabilities
+## Core Features
 
-### Resident side
+### Resident
 
-- Passkey authentication
-- First-time passkey enrollment via phone + house code for active residents
-- Secure cookie-based session
-- Active/closed surveys list
-- Survey voting
-- Household-level duplicate vote protection
-- Aggregate results page
-- KK/RU language switching
+- Passkey-first sign in
+- First-time passkey registration via `phone + house` for active residents only
+- Session cookie auth (`rv_resident_session`)
+- Survey participation and results
+- One vote per house per survey enforcement
+- Kazakh / Russian language switching
 
-### Admin side
+### Admin
 
-- Login with login/password
-- Resident management:
-  - list residents
-  - add resident from UI (phone + house)
-  - update resident status (`ACTIVE`, `PENDING`, `DISABLED`)
-- Survey management:
-  - wizard builder (Details -> Questions -> Review)
-  - question templates (`SINGLE`, `SCALE`, `TEXT`)
-  - archive/restore survey status
-  - force delete survey (deletes linked votes first)
-- Analytics and detailed review:
-  - participation dashboard
-  - survey-level vote detail page with house codes and submitted answers
+- Login/password auth (`rv_admin_session`)
+- Resident management (add, status update, passkey reset)
+- Survey builder wizard (details -> questions -> review)
+- Survey lifecycle management (`ACTIVE`, `CLOSED`, `ARCHIVED`)
+- Force delete surveys (removes linked votes first)
+- Detailed per-survey answer view by house
+- CSV export of detailed survey answers (localized by selected UI language)
 
-## Security and Integrity
+## Recent Updates
 
-- Session tokens are random and hashed before DB storage (`AuthSession.tokenHash`)
-- HTTP-only session cookies:
-  - `rv_resident_session`
-  - `rv_admin_session`
-- Session durations:
-  - Resident session: 7 days
-  - Admin session: 7 days
-- Authorization middleware protects resident/admin APIs separately
-- Audit logging tracks auth attempts, vote events, and admin mutations
-- Core DB constraints:
+- OTP removed, resident auth migrated to passkeys (WebAuthn).
+- Resident login UX: direct passkey sign-in button + collapsible passkey registration section.
+- Global floating notifications: top-center popups for success/error flows (green/red).
+- Admin survey results page:
+  - Excel-style CSV export action
+  - improved mobile header wrapping (badge/buttons stay inside panel)
+- Session hint text clarified: 7-day session expiry requires sign-in again, not passkey re-registration.
+
+## Security Model
+
+- DB-backed sessions; only hashed tokens are stored (`AuthSession.tokenHash`)
+- HTTP-only cookies, `sameSite=lax`, `secure` in production
+- Separate resident/admin guards and cookies
+- Audit logs for auth and admin mutations
+- Integrity constraints:
   - `Resident(phoneNormalized, houseId)` unique
-  - `Vote(surveyId, houseId)` unique (one vote per house per survey)
+  - `Vote(surveyId, houseId)` unique
 
-## API Endpoints
+Session TTL defaults:
 
-Resident:
+- Resident: 7 days
+- Admin: 7 days
+
+After expiry, resident signs in again with existing passkey (no re-registration needed).
+
+## API Surface
+
+### Resident
 
 - `GET /api/resident/session`
 - `POST /api/resident/auth/passkey/register/options`
@@ -71,7 +73,7 @@ Resident:
 - `POST /api/resident/surveys/:surveyId/vote`
 - `GET /api/resident/results`
 
-Admin:
+### Admin
 
 - `GET /api/admin/session`
 - `POST /api/admin/auth/login`
@@ -86,27 +88,11 @@ Admin:
 - `DELETE /api/admin/surveys/:surveyId`
 - `GET /api/admin/analytics/participation`
 - `GET /api/admin/surveys/:surveyId/results`
-
-## Repository Layout
-
-```txt
-.
-|-- client/
-|   |-- app/
-|   |-- components/
-|   `-- lib/
-|-- server/
-|   |-- prisma/
-|   |-- src/routes/
-|   |-- src/middleware/
-|   |-- src/services/
-|   `-- lib/
-`-- shared/
-```
+- `GET /api/admin/surveys/:surveyId/results/csv?lang=kk|ru`
 
 ## Local Development
 
-### 1) Install dependencies
+### 1) Install
 
 ```bash
 npm install
@@ -119,13 +105,7 @@ npm --prefix client install
 - `server/.env` from `server/.env.example`
 - `client/.env` from `client/.env.example`
 
-Minimum server env values:
-
-- `DATABASE_URL`
-- `SESSION_SECRET` (32+ chars)
-- `CLIENT_ORIGIN` (for local: `http://localhost:3000`)
-
-### 3) Prepare database
+### 3) Prepare DB
 
 ```bash
 npm --prefix server run prisma:generate
@@ -133,7 +113,7 @@ npm --prefix server run prisma:deploy
 npm --prefix server run prisma:seed
 ```
 
-### 4) Start app
+### 4) Start
 
 ```bash
 npm run dev
@@ -143,11 +123,11 @@ Local URLs:
 
 - Client: `http://localhost:3000`
 - API: `http://localhost:4000`
-- Health: `http://localhost:4000/health`
+- API health: `http://localhost:4000/health`
 
 ## Scripts
 
-Root:
+### Root
 
 - `npm run dev:server`
 - `npm run dev:client`
@@ -156,7 +136,7 @@ Root:
 - `npm run db:deploy`
 - `npm run db:seed`
 
-Server:
+### Server
 
 - `npm --prefix server run dev`
 - `npm --prefix server run build`
@@ -166,143 +146,90 @@ Server:
 - `npm --prefix server run prisma:migrate`
 - `npm --prefix server run prisma:deploy`
 - `npm --prefix server run prisma:seed`
-- `npm --prefix server run prisma:localize-surveys`
 - `npm --prefix server run prisma:cleanup:residents`
+- `npm --prefix server run prisma:localize-surveys`
 
-Client:
+### Client
 
 - `npm --prefix client run dev`
 - `npm --prefix client run build`
 - `npm --prefix client run start`
 
-## Seed Data Policy
+## Environment
 
-Current seed is production-oriented and minimal:
+### Server required
 
-- Residents:
-  - `+7 708 858 5331` (house `9`)
-  - `+7 701 552 6777` (house `9`)
-- Legacy demo surveys are cleaned up by slug:
-  - `parking-lot-redesign`
-  - `playground-upgrade`
-  - `security-cctv-entry`
-- Admin account is created/updated from:
-  - `ADMIN_BOOTSTRAP_EMAIL`
-  - `ADMIN_BOOTSTRAP_PASSWORD`
+- `CLIENT_ORIGIN`
+- `DATABASE_URL`
+- `SESSION_SECRET`
+- `WEBAUTHN_RP_ID`
+- `WEBAUTHN_RP_NAME`
+- `WEBAUTHN_ORIGINS`
 
-## Controlled Resident Cleanup Script
+Optional:
 
-Script: `server/prisma/cleanup-residents.ts`
+- `OPENAI_API_KEY`
+- `OPENAI_TRANSLATION_MODEL`
 
-Dry run:
+Seed bootstrap:
 
-```bash
-$env:RESIDENT_CLEANUP_PHONES="+77771234561,+77771234562"; npm --prefix server run prisma:cleanup:residents
-```
+- `ADMIN_BOOTSTRAP_EMAIL` (used as admin login value, default `admin`)
+- `ADMIN_BOOTSTRAP_PASSWORD`
 
-Execute delete:
+### Client required
 
-```bash
-$env:RESIDENT_CLEANUP_PHONES="+77771234561,+77771234562"; $env:RESIDENT_CLEANUP_CONFIRM="DELETE"; npm --prefix server run prisma:cleanup:residents
-```
-
-Behavior:
-
-- Finds matching residents by normalized phone
-- Deletes resident-linked votes first
-- Deletes residents after vote cleanup
-- Stays in dry-run mode unless `RESIDENT_CLEANUP_CONFIRM=DELETE`
-
-## Passkey Configuration
-
-WebAuthn env vars in `server/.env`:
-
-- `WEBAUTHN_RP_ID` (example: `localhost` in dev, your domain in prod)
-- `WEBAUTHN_RP_NAME` (display name for authenticator prompt)
-- `WEBAUTHN_ORIGINS` (comma-separated allowed origins)
-
-Local default:
-
-- `WEBAUTHN_RP_ID=localhost`
-- `WEBAUTHN_RP_NAME=Resident Vote`
-- `WEBAUTHN_ORIGINS=http://localhost:3000`
-
-## KK/RU Survey Localization
-
-- Survey text is stored in encoded localized form for `kk` and `ru`
-- Translation can use OpenAI when configured:
-  - `OPENAI_API_KEY`
-  - `OPENAI_TRANSLATION_MODEL` (default fallback in code: `gpt-4.1-mini`)
-- If translation is unavailable, survey creation still succeeds with source text
+- `API_PROXY_TARGET` (default dev target: `http://localhost:4000`)
 
 ## Deployment (Vercel + Railway)
 
-### Client on Vercel
+### Client (Vercel)
 
-1. Import repository
-2. Set Root Directory to `client`
-3. Add env:
-   - `API_PROXY_TARGET=https://<railway-api-domain>`
+- Root Directory: `client`
+- Env: `API_PROXY_TARGET=https://<railway-api-domain>`
 
-### Server on Railway
+### Server (Railway)
 
-1. Create service from same repository
-2. Set Root Directory to `server`
-3. Start command:
-   - `npm run start`
-4. Add env:
-   - `NODE_ENV=production`
-   - `CLIENT_ORIGIN=https://<your-vercel-domain>`
-   - `DATABASE_URL=...`
-   - `SESSION_SECRET=...`
-   - `WEBAUTHN_RP_ID=<your-domain>`
-   - `WEBAUTHN_RP_NAME=Resident Vote`
-   - `WEBAUTHN_ORIGINS=https://<your-vercel-domain>`
+- Root Directory: `server`
+- Start command: `npm run start`
+- Env:
+  - `NODE_ENV=production`
+  - `CLIENT_ORIGIN=https://<vercel-domain>`
+  - `DATABASE_URL=...`
+  - `SESSION_SECRET=...`
+  - `WEBAUTHN_RP_ID=<production-domain>`
+  - `WEBAUTHN_RP_NAME=Resident Vote`
+  - `WEBAUTHN_ORIGINS=https://<vercel-domain>[,https://<custom-domain>]`
 
-### Database lifecycle in production
-
-Run in Railway server context (or CI job):
+### Production DB lifecycle
 
 ```bash
 npm run prisma:generate
 npm run prisma:deploy
 ```
 
-First deploy only (optional):
+Optional first bootstrap:
 
 ```bash
 npm run prisma:seed
 ```
 
-### Post-deploy checks
+## Verification Checklist
 
-- `GET https://<railway-domain>/health` returns `{ "ok": true }`
-- `GET https://<vercel-domain>/api/resident/session` returns JSON, not 404 HTML
-- Resident/admin login works
-- Surveys load and voting works from Vercel frontend
+- `GET <railway-domain>/health` -> `{ "ok": true }`
+- `GET <vercel-domain>/api/resident/session` returns JSON (not HTML 404)
+- Resident passkey sign-in works
+- Admin login works
+- Admin CSV export downloads successfully
 
-## Troubleshooting
+## Tests
 
-- `Cannot GET /api/...` on frontend:
-  - `API_PROXY_TARGET` is missing/wrong on Vercel
-- `DATABASE_URL not found`:
-  - missing env variable in server context
-- DB auth failed:
-  - invalid DB credentials/URL
-- Passkey flow fails in browser:
-  - check HTTPS and correct `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGINS`
-- Admin password changed in env but login fails:
-  - run `npm --prefix server run prisma:seed` to refresh bootstrap hash
-
-## Test Coverage
-
-Current automated tests are server unit tests:
+Current automated unit tests (server):
 
 - `server/tests/unit/phone.test.ts`
 - `server/tests/unit/passkey-policy.test.ts`
 - `server/tests/unit/vote-policy.test.ts`
 
-Run tests:
+Run:
 
 ```bash
 npm --prefix server run test

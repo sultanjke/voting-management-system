@@ -1,15 +1,29 @@
-# Client (Next.js UI)
+# Client (Next.js UI-Only App)
 
-This app is frontend-only and contains:
+Frontend for the voting management platform.
+
+## Scope
+
+This app contains:
 
 - App Router pages
-- UI components
-- i18n and presentation logic
+- Resident/admin UI components
+- KK/RU i18n
 - API calls to `/api/*`
+- UI-only state, forms, notifications
 
-It does not include Prisma, migrations, or direct DB access.
+This app does **not** include Prisma, migrations, or direct database access.
 
-## Run
+## Current UX Highlights
+
+- Resident passkey login:
+  - Primary direct sign-in button
+  - Collapsible first-time passkey registration section
+- Top-center popup notifications for success/error flows
+- Admin survey results page with CSV export action
+- Mobile responsiveness improvements for admin survey results header controls
+
+## Run Locally
 
 ```bash
 npm install
@@ -18,20 +32,43 @@ npm run dev
 
 Default URL: `http://localhost:3000`
 
-## API integration
+## Build
 
-All client requests use `/api/*`.
-`next.config.ts` rewrites those paths to the Express server target:
+```bash
+npm run build
+npm run start
+```
 
-- `API_PROXY_TARGET` (default `http://localhost:4000`)
+## API Integration
 
-## Vercel deployment
+Client sends requests to `/api/*`.
 
-- Framework preset: Next.js
+`next.config.ts` rewrites these calls to:
+
+- `API_PROXY_TARGET` (defaults to `http://localhost:4000`)
+
+Example:
+
+- Browser calls: `/api/admin/surveys`
+- Next proxy target: `http://localhost:4000/api/admin/surveys`
+
+## Environment
+
+Use `.env` with:
+
+```env
+API_PROXY_TARGET=http://localhost:4000
+```
+
+Template file:
+
+- `client/.env.example`
+
+## Deployment (Vercel)
+
+- Framework: Next.js
 - Root Directory: `client`
-- Build command: `npm run build` (default)
-- Output: Next.js default
-- Environment variables:
+- Env:
   - `API_PROXY_TARGET=https://<railway-api-domain>`
 
-This keeps browser requests same-origin (`/api/*`) while Vercel proxies them to Railway.
+This keeps browser auth/cookie behavior simple because the browser still uses same-origin `/api/*` calls.
